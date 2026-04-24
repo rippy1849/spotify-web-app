@@ -27,7 +27,9 @@ load_dotenv()
 
 SPOTIFY_CLIENT_ID     = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-REDIRECT_URI          = "http://127.0.0.1:8000/auth-redirect"
+# REDIRECT_URI          = "http://127.0.0.1:8000/auth-redirect"
+REDIRECT_URI          = "http://100.113.65.45:8000/auth-redirect"
+
 
 SPOTIFY_AUTH_URL        = "https://accounts.spotify.com/authorize"
 SPOTIFY_TOKEN_URL       = "https://accounts.spotify.com/api/token"

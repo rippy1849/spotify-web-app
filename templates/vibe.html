@@ -258,20 +258,18 @@
             <p class="empty">// NOT ENOUGH DATA YET — KEEP LISTENING //</p>
         {% else %}
 
-        <!-- Mood distribution + genre chart -->
         <div class="section">
             <h2>🎵 MOOD & GENRE BREAKDOWN</h2>
             <div class="two-col">
-                <div class="chart-card" style="height: 520px;">
+                <div class="chart-card" style="height: 560px;">
                     <canvas id="moodChart"></canvas>
                 </div>
-                <div class="chart-card" style="height: 520px;">
+                <div class="chart-card" style="height: 560px;">
                     <canvas id="genreChart"></canvas>
                 </div>
             </div>
         </div>
 
-        <!-- Mood by hour -->
         <div class="section">
             <h2>🕐 DOMINANT MOOD BY HOUR</h2>
             <div class="hour-grid">
@@ -284,7 +282,6 @@
             </div>
         </div>
 
-        <!-- Mood by day of week + genre mood map -->
         <div class="section">
             <h2>📅 DOMINANT MOOD BY DAY & GENRE</h2>
             <div class="two-col-equal">
@@ -317,7 +314,6 @@
             </div>
         </div>
 
-        <!-- Recent tracks with auto mood -->
         <div class="section">
             <h2>🕓 RECENT TRACKS WITH AUTO MOOD</h2>
             <table>
@@ -383,8 +379,10 @@
                         position: 'bottom',
                         labels: {
                             color: '#fff',
-                            font: { family: 'Share Tech Mono', size: 9 },
-                            padding: 12
+                            font: { family: 'Share Tech Mono', size: 14 },
+                            padding: 20,
+                            boxWidth: 24,
+                            boxHeight: 14,
                         }
                     },
                     title: {
@@ -438,7 +436,7 @@
                     y: {
                         ticks: {
                             color: '#ff00aa',
-                            font: { family: 'Share Tech Mono', size: 10 },
+                            font: { family: 'Share Tech Mono', size: 13 },
                             autoSkip: false,
                         },
                         grid: { color: '#ffffff0a' }
