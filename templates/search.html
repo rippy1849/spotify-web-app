@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SEARCH // RAVE FM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            min-height: 100vh;
+            background: #000;
+            color: #fff;
+            padding: 40px 20px;
+        }
+
+        .scanlines {
+            pointer-events: none;
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent 0px,
+                transparent 3px,
+                rgba(0,0,0,0.12) 3px,
+                rgba(0,0,0,0.12) 4px
+            );
+            z-index: 10;
+        }
+
+        .bg {
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%),
+                #000;
+            animation: bgshift 6s ease-in-out infinite alternate;
+            z-index: 0;
+        }
+
+        @keyframes bgshift {
+            from { filter: hue-rotate(0deg); }
+            to   { filter: hue-rotate(180deg); }
+        }
+
+        .content {
+            position: relative;
+            z-index: 5;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowShift 4s linear infinite;
+            filter: drop-shadow(0 0 12px #ff00ff);
+            letter-spacing: 4px;
+            margin-bottom: 8px;
+        }
+
+        @keyframes rainbowShift {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
+        }
+
+        .subtitle {
+            color: #00ffff;
+            text-shadow: 0 0 8px #00ffff;
+            letter-spacing: 4px;
+            font-size: 0.75rem;
+            margin-bottom: 40px;
+        }
+
+        .nav {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            color: #ff00aa;
+            text-decoration: none;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            text-shadow: 0 0 8px #ff00aa;
+        }
+
+        .nav a:hover { color: #fff; }
+
+        .search-form {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        .search-form input {
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid #ff00ff44;
+            border-radius: 4px;
+            padding: 12px 16px;
+            color: #fff;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .search-form input:focus {
+            border-color: #ff00ff;
+            box-shadow: 0 0 16px #ff00ff44;
+        }
+
+        .search-form input::placeholder { color: #555; }
+
+        .search-form button {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+            letter-spacing: 3px;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 700;
+            color: #000;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ff00ff);
+            background-size: 200%;
+            animation: btnShift 1.5s linear infinite;
+            box-shadow: 0 0 20px #ff00ff;
+        }
+
+        @keyframes btnShift {
+            0%   { background-position: 0%; }
+            100% { background-position: 200%; }
+        }
+
+        .results-count {
+            color: #888;
+            font-size: 0.72rem;
+            letter-spacing: 2px;
+            margin-bottom: 16px;
+        }
+
+        .result-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px;
+            border-bottom: 1px solid #ffffff0a;
+            transition: background 0.15s;
+        }
+
+        .result-item:hover { background: #ffffff08; }
+
+        .result-item img {
+            width: 48px;
+            height: 48px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .result-item .info .name {
+            font-size: 0.88rem;
+            color: #fff;
+            margin-bottom: 3px;
+        }
+
+        .result-item .info .artist {
+            font-size: 0.73rem;
+            color: #00ffff;
+            letter-spacing: 1px;
+        }
+
+        .result-item .info .album {
+            font-size: 0.68rem;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .result-item .meta {
+            margin-left: auto;
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .result-item .meta .date {
+            color: #ff00aa;
+            font-size: 0.7rem;
+        }
+
+        .skipped-badge {
+            display: inline-block;
+            background: #ff00aa22;
+            color: #ff00aa;
+            border: 1px solid #ff00aa55;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+            margin-top: 4px;
+        }
+
+        .played-badge {
+            display: inline-block;
+            background: #00ff8822;
+            color: #00ff88;
+            border: 1px solid #00ff8855;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+            margin-top: 4px;
+        }
+
+        .empty {
+            color: #555;
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            text-align: center;
+            padding: 40px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/stats">◈ STATS</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+
+        <h1>SEARCH</h1>
+        <p class="subtitle">◈ YOUR HISTORY ◈</p>
+
+        <form class="search-form" method="get" action="/search">
+            <input
+                type="text"
+                name="q"
+                value="{{ query }}"
+                placeholder="TRACK, ARTIST, OR ALBUM..."
+                autofocus
+            >
+            <button type="submit">SEARCH</button>
+        </form>
+
+        {% if query %}
+            <p class="results-count">{{ results | length }} RESULT(S) FOR "{{ query }}"</p>
+            {% if results %}
+                {% for play in results %}
+                <div class="result-item">
+                    {% if play.album_art_url %}
+                    <img src="{{ play.album_art_url }}" alt="art">
+                    {% endif %}
+                    <div class="info">
+                        <div class="name">{{ play.track_name }}</div>
+                        <div class="artist">{{ play.artists }}</div>
+                        <div class="album">{{ play.album }}</div>
+                    </div>
+                    <div class="meta">
+                        <div class="date">{{ play.listened_at.strftime("%m/%d %H:%M") }}</div>
+                        {% if play.was_skipped %}
+                            <span class="skipped-badge">SKIPPED</span>
+                        {% else %}
+                            <span class="played-badge">PLAYED</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="empty">// NO RESULTS FOUND //</p>
+            {% endif %}
+        {% endif %}
+    </div>
+</body>
+</html>

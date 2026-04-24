@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MOOD // RAVE FM</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            min-height: 100vh;
+            background: #000;
+            color: #fff;
+            padding: 40px 20px;
+        }
+
+        .scanlines {
+            pointer-events: none;
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent 0px,
+                transparent 3px,
+                rgba(0,0,0,0.12) 3px,
+                rgba(0,0,0,0.12) 4px
+            );
+            z-index: 10;
+        }
+
+        .bg {
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%),
+                #000;
+            animation: bgshift 6s ease-in-out infinite alternate;
+            z-index: 0;
+        }
+
+        @keyframes bgshift {
+            from { filter: hue-rotate(0deg); }
+            to   { filter: hue-rotate(180deg); }
+        }
+
+        .content {
+            position: relative;
+            z-index: 5;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowShift 4s linear infinite;
+            filter: drop-shadow(0 0 12px #ff00ff);
+            letter-spacing: 4px;
+            margin-bottom: 8px;
+        }
+
+        @keyframes rainbowShift {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
+        }
+
+        .subtitle {
+            color: #00ffff;
+            text-shadow: 0 0 8px #00ffff;
+            letter-spacing: 4px;
+            font-size: 0.75rem;
+            margin-bottom: 40px;
+        }
+
+        .nav {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            color: #ff00aa;
+            text-decoration: none;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            text-shadow: 0 0 8px #ff00aa;
+        }
+
+        .nav a:hover { color: #fff; }
+
+        h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            letter-spacing: 4px;
+            color: #ffff00;
+            text-shadow: 0 0 10px #ffff0088;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #ffff0033;
+            padding-bottom: 8px;
+        }
+
+        .mood-logger {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff44;
+            border-radius: 12px;
+            padding: 28px;
+            margin-bottom: 40px;
+            box-shadow: 0 0 30px #ff00ff22;
+        }
+
+        .mood-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .mood-btn {
+            background: none;
+            border: 1px solid #ff00ff44;
+            border-radius: 99px;
+            padding: 10px 20px;
+            color: #fff;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .mood-btn:hover,
+        .mood-btn.selected {
+            background: #ff00ff33;
+            border-color: #ff00ff;
+            box-shadow: 0 0 12px #ff00ff44;
+            color: #ff00ff;
+        }
+
+        .mood-btn[data-mood="ENERGETIC"]:hover,
+        .mood-btn[data-mood="ENERGETIC"].selected { background: #ffff0022; border-color: #ffff00; color: #ffff00; box-shadow: 0 0 12px #ffff0044; }
+        .mood-btn[data-mood="CHILL"]:hover,
+        .mood-btn[data-mood="CHILL"].selected     { background: #00ffff22; border-color: #00ffff; color: #00ffff; box-shadow: 0 0 12px #00ffff44; }
+        .mood-btn[data-mood="SAD"]:hover,
+        .mood-btn[data-mood="SAD"].selected        { background: #0066ff22; border-color: #0066ff; color: #0066ff; box-shadow: 0 0 12px #0066ff44; }
+        .mood-btn[data-mood="HAPPY"]:hover,
+        .mood-btn[data-mood="HAPPY"].selected      { background: #00ff8822; border-color: #00ff88; color: #00ff88; box-shadow: 0 0 12px #00ff8844; }
+        .mood-btn[data-mood="FOCUSED"]:hover,
+        .mood-btn[data-mood="FOCUSED"].selected    { background: #aa00ff22; border-color: #aa00ff; color: #aa00ff; box-shadow: 0 0 12px #aa00ff44; }
+        .mood-btn[data-mood="ANGRY"]:hover,
+        .mood-btn[data-mood="ANGRY"].selected      { background: #ff220022; border-color: #ff2200; color: #ff2200; box-shadow: 0 0 12px #ff220044; }
+        .mood-btn[data-mood="ROMANTIC"]:hover,
+        .mood-btn[data-mood="ROMANTIC"].selected   { background: #ff006622; border-color: #ff0066; color: #ff0066; box-shadow: 0 0 12px #ff006644; }
+        .mood-btn[data-mood="ANXIOUS"]:hover,
+        .mood-btn[data-mood="ANXIOUS"].selected    { background: #ff660022; border-color: #ff6600; color: #ff6600; box-shadow: 0 0 12px #ff660044; }
+
+        .note-input {
+            width: 100%;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid #ff00ff33;
+            border-radius: 4px;
+            padding: 10px 14px;
+            color: #fff;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+            outline: none;
+            margin-bottom: 14px;
+        }
+
+        .note-input:focus { border-color: #ff00ff; box-shadow: 0 0 12px #ff00ff33; }
+        .note-input::placeholder { color: #555; }
+
+        .log-btn {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+            letter-spacing: 3px;
+            padding: 12px 28px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 700;
+            color: #000;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ff00ff);
+            background-size: 200%;
+            animation: btnShift 1.5s linear infinite;
+            box-shadow: 0 0 20px #ff00ff;
+        }
+
+        @keyframes btnShift {
+            0%   { background-position: 0%; }
+            100% { background-position: 200%; }
+        }
+
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .chart-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff22;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .chart-card canvas { max-height: 260px; }
+
+        .mood-artist-table {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff22;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.78rem;
+        }
+
+        th {
+            text-align: left;
+            color: #ff00aa;
+            letter-spacing: 2px;
+            font-size: 0.65rem;
+            padding: 8px 10px;
+            border-bottom: 1px solid #ff00aa33;
+        }
+
+        td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #ffffff0a;
+            color: #ccc;
+        }
+
+        tr:hover td { background: #ffffff08; }
+
+        .recent-mood-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 0;
+            border-bottom: 1px solid #ffffff0a;
+        }
+
+        .mood-tag {
+            padding: 4px 12px;
+            border-radius: 99px;
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            flex-shrink: 0;
+        }
+
+        .mood-note { color: #888; font-size: 0.72rem; flex: 1; }
+        .mood-time { color: #555; font-size: 0.68rem; flex-shrink: 0; }
+
+        .section { margin-bottom: 40px; }
+
+        @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/stats">◈ STATS</a>
+            <a href="/recap">📋 RECAP</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+
+        <h1>MOOD</h1>
+        <p class="subtitle">◈ HOW ARE YOU FEELING? ◈</p>
+
+        <!-- Logger -->
+        <div class="mood-logger">
+            <h2 style="border:none; margin-bottom:16px;">LOG YOUR MOOD</h2>
+            <form method="post" action="/mood/log" id="moodForm">
+                <input type="hidden" name="mood" id="moodInput">
+                <div class="mood-buttons">
+                    {% for m in ["ENERGETIC","CHILL","HAPPY","SAD","FOCUSED","ANGRY","ROMANTIC","ANXIOUS"] %}
+                    <button type="button" class="mood-btn" data-mood="{{ m }}">{{ m }}</button>
+                    {% endfor %}
+                </div>
+                <input class="note-input" type="text" name="note" placeholder="ADD A NOTE (OPTIONAL)...">
+                <button class="log-btn" type="submit">⚡ LOG MOOD</button>
+            </form>
+        </div>
+
+        <div class="two-col">
+            <!-- Mood distribution chart -->
+            <div class="chart-card">
+                <canvas id="moodChart"></canvas>
+            </div>
+
+            <!-- Top artist per mood -->
+            <div class="mood-artist-table">
+                <h2 style="border:none; margin-bottom:12px; font-size:0.75rem;">🎤 TOP ARTIST PER MOOD</h2>
+                <table>
+                    <thead><tr><th>MOOD</th><th>ARTIST</th></tr></thead>
+                    <tbody>
+                        {% for mood, artist in mood_artists.items() %}
+                        <tr>
+                            <td>{{ mood }}</td>
+                            <td style="color:#00ffff;">{{ artist }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Recent moods -->
+        <div class="section">
+            <h2>🕓 RECENT MOODS</h2>
+            {% for m in recent_moods %}
+            <div class="recent-mood-item">
+                <span class="mood-tag" style="background:#ff00ff22; border:1px solid #ff00ff55; color:#ff00ff;">
+                    {{ m.mood }}
+                </span>
+                <span class="mood-note">{{ m.note or "—" }}</span>
+                <span class="mood-time">{{ m.logged_at.strftime("%m/%d %H:%M") }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        // Mood button selection
+        const btns = document.querySelectorAll('.mood-btn');
+        const moodInput = document.getElementById('moodInput');
+        btns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                btns.forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                moodInput.value = btn.dataset.mood;
+            });
+        });
+
+        // Mood chart
+        const moodColors = ['#ff00ff','#00ffff','#00ff88','#0066ff','#ffff00','#ff2200','#ff0066','#ff6600'];
+        new Chart(document.getElementById('moodChart'), {
+            type: 'doughnut',
+            data: {
+                labels: {{ mood_labels | tojson }},
+                datasets: [{
+                    data: {{ mood_values | tojson }},
+                    backgroundColor: moodColors.map(c => c + '88'),
+                    borderColor: moodColors,
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#fff',
+                            font: { family: 'Share Tech Mono', size: 10 },
+                            padding: 16,
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'MOOD DISTRIBUTION',
+                        color: '#ffff00',
+                        font: { family: 'Orbitron', size: 10 },
+                        padding: { bottom: 10 }
+                    },
+                    tooltip: {
+                        backgroundColor: '#111',
+                        borderColor: '#ff00ff',
+                        borderWidth: 1,
+                        titleColor: '#00ffff',
+                        bodyColor: '#fff',
+                        titleFont: { family: 'Share Tech Mono' },
+                        bodyFont:  { family: 'Share Tech Mono' },
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

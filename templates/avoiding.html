@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WHAT ARE YOU AVOIDING? // RAVE FM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Share Tech Mono', monospace; min-height: 100vh; background: #000; color: #fff; padding: 40px 20px; }
+        .scanlines { pointer-events: none; position: fixed; inset: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 4px); z-index: 10; }
+        .bg { position: fixed; inset: 0; background: radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%), #000; animation: bgshift 6s ease-in-out infinite alternate; z-index: 0; }
+        @keyframes bgshift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(180deg); } }
+        .content { position: relative; z-index: 5; max-width: 900px; margin: 0 auto; }
+        h1 { font-family: 'Orbitron', sans-serif; font-size: 2rem; font-weight: 900; background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff); background-size: 300% 100%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: rainbowShift 4s linear infinite; filter: drop-shadow(0 0 12px #ff00ff); letter-spacing: 4px; margin-bottom: 8px; }
+        @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+        .subtitle { color: #00ffff; text-shadow: 0 0 8px #00ffff; letter-spacing: 4px; font-size: 0.75rem; margin-bottom: 40px; }
+        .nav { display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+        .nav a { color: #ff00aa; text-decoration: none; font-size: 0.75rem; letter-spacing: 2px; text-shadow: 0 0 8px #ff00aa; }
+        .nav a:hover { color: #fff; }
+        h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 4px; color: #ffff00; text-shadow: 0 0 10px #ffff0088; margin-bottom: 16px; border-bottom: 1px solid #ffff0033; padding-bottom: 8px; }
+        .avoid-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: rgba(255,0,170,0.04);
+            border: 1px solid #ff00aa33;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            transition: background 0.2s;
+        }
+        .avoid-card:hover { background: rgba(255,0,170,0.08); }
+        .avoid-card img { width: 56px; height: 56px; border-radius: 6px; flex-shrink: 0; border: 1px solid #ff00aa33; }
+        .avoid-card .info .name { font-size: 0.9rem; color: #fff; margin-bottom: 3px; }
+        .avoid-card .info .artist { font-size: 0.75rem; color: #00ffff; letter-spacing: 1px; }
+        .avoid-card .info .album { font-size: 0.68rem; color: #888; margin-top: 2px; }
+        .avoid-card .meta { margin-left: auto; text-align: right; flex-shrink: 0; }
+        .avoid-card .meta .attempts { font-family: 'Orbitron', sans-serif; font-size: 1.2rem; color: #ff00aa; text-shadow: 0 0 10px #ff00aa; }
+        .avoid-card .meta .attempts-label { font-size: 0.6rem; letter-spacing: 2px; color: #ff00aa88; }
+        .avoid-card .meta .avg { font-size: 0.68rem; color: #ffff00; margin-top: 4px; }
+        .section { margin-bottom: 48px; }
+        .empty { color: #555; font-size: 0.8rem; letter-spacing: 2px; text-align: center; padding: 40px 0; }
+        .ghost { font-size: 1.5rem; margin-right: 8px; }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/stats">◈ STATS</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+
+        <h1>👻 WHAT ARE YOU AVOIDING?</h1>
+        <p class="subtitle">◈ TRACKS YOU START BUT NEVER FINISH ◈</p>
+
+        <div class="section">
+            <h2>🚫 ALWAYS SKIPPED (5+ ATTEMPTS, 0 COMPLETIONS)</h2>
+            {% if avoiding %}
+                {% for row in avoiding %}
+                <div class="avoid-card">
+                    {% if row.album_art_url %}
+                    <img src="{{ row.album_art_url }}" alt="art">
+                    {% endif %}
+                    <div class="info">
+                        <div class="name">{{ row.track_name }}</div>
+                        <div class="artist">{{ row.artists }}</div>
+                        <div class="album">{{ row.album }}</div>
+                    </div>
+                    <div class="meta">
+                        <div class="attempts">{{ row.attempts }}</div>
+                        <div class="attempts-label">ATTEMPTS</div>
+                        <div class="avg">AVG {{ "%.1f"|format(row.avg_pct) }}% IN</div>
+                        <div class="avg">MAX {{ "%.1f"|format(row.max_pct) }}% IN</div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="empty">// NO DATA YET — KEEP LISTENING //</p>
+            {% endif %}
+        </div>
+
+        <div class="section">
+            <h2>⚠️ ALMOST AVOIDING (AVG &lt;30% THROUGH, 3+ PLAYS)</h2>
+            {% if almost_avoiding %}
+                {% for row in almost_avoiding %}
+                <div class="avoid-card">
+                    {% if row.album_art_url %}
+                    <img src="{{ row.album_art_url }}" alt="art">
+                    {% endif %}
+                    <div class="info">
+                        <div class="name">{{ row.track_name }}</div>
+                        <div class="artist">{{ row.artists }}</div>
+                    </div>
+                    <div class="meta">
+                        <div class="attempts">{{ row.attempts }}</div>
+                        <div class="attempts-label">PLAYS</div>
+                        <div class="avg">AVG {{ "%.1f"|format(row.avg_pct) }}% IN</div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="empty">// NO DATA YET — KEEP LISTENING //</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NOW PLAYING // RAVE FM</title>
+    <meta http-equiv="refresh" content="10">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .scanlines {
+            pointer-events: none;
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent 0px,
+                transparent 3px,
+                rgba(0,0,0,0.12) 3px,
+                rgba(0,0,0,0.12) 4px
+            );
+            z-index: 10;
+        }
+
+        .bg {
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%),
+                #000;
+            animation: bgshift 6s ease-in-out infinite alternate;
+            z-index: 0;
+        }
+
+        @keyframes bgshift {
+            from { filter: hue-rotate(0deg); }
+            to   { filter: hue-rotate(180deg); }
+        }
+
+        .card {
+            position: relative;
+            z-index: 5;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff44;
+            border-radius: 12px;
+            padding: 36px 32px;
+            text-align: center;
+            max-width: 420px;
+            width: 90%;
+            box-shadow:
+                0 0 30px #ff00ff33,
+                0 0 60px #00ffff22,
+                inset 0 0 30px #ff00ff11;
+            animation: cardglow 3s ease-in-out infinite alternate;
+        }
+
+        @keyframes cardglow {
+            from { box-shadow: 0 0 30px #ff00ff33, 0 0 60px #00ffff22, inset 0 0 30px #ff00ff11; }
+            to   { box-shadow: 0 0 40px #00ffff55, 0 0 80px #ff00ff22, inset 0 0 40px #00ffff11; }
+        }
+
+        .album-art-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+.album-art-wrapper::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 12px;
+    background: linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #00ff88);
+    animation: borderRainbow 6s linear infinite;
+    z-index: 1;
+}
+
+        .album-art-wrapper::after {
+            content: '';
+            position: absolute;
+            inset: 4px;
+            border-radius: 8px;
+            background: #000;
+            z-index: 2;
+        }
+
+        .album-art-wrapper img {
+            width: 200px;
+            height: 200px;
+            border-radius: 8px;
+            display: block;
+            position: relative;
+            z-index: 3;
+        }
+
+@keyframes borderRainbow {
+    0%   { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
+}
+
+        .track-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            background-size: 300% 100%;
+            animation: rainbowShift 4s linear infinite;
+            margin-bottom: 8px;
+            filter: drop-shadow(0 0 6px #ff00ff);
+        }
+
+        @keyframes rainbowShift {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
+        }
+
+        .artist {
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+            font-size: 0.95rem;
+            letter-spacing: 2px;
+            margin-bottom: 4px;
+        }
+
+        .album {
+            color: #ff00aa;
+            text-shadow: 0 0 8px #ff00aa44;
+            font-size: 0.78rem;
+            letter-spacing: 2px;
+            margin-bottom: 16px;
+        }
+
+        .status {
+            font-size: 0.75rem;
+            letter-spacing: 3px;
+            margin-bottom: 14px;
+            color: #00ff88;
+            text-shadow: 0 0 10px #00ff88;
+            animation: blink 1.5s step-start infinite;
+        }
+
+        .status.paused {
+            color: #ffff00;
+            text-shadow: 0 0 10px #ffff00;
+            animation: none;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0.4; }
+        }
+
+        .progress-wrapper {
+            width: 100%;
+            height: 6px;
+            background: #ffffff15;
+            border-radius: 99px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            border-radius: 99px;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #00ff88, #ff00ff);
+            background-size: 300% 100%;
+            animation: progressRainbow 4s linear infinite;
+        }
+
+        @keyframes progressRainbow {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
+        }
+
+        a.btn {
+            display: inline-block;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+            letter-spacing: 3px;
+            padding: 12px 24px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 700;
+            color: #000;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ff00ff);
+            background-size: 200%;
+            animation: btnShift 1.5s linear infinite;
+            box-shadow: 0 0 20px #ff00ff, 0 0 40px #00ffff44;
+        }
+
+        a.btn:hover { transform: scale(1.05); }
+
+        @keyframes btnShift {
+            0%   { background-position: 0%; }
+            100% { background-position: 200%; }
+        }
+
+        .nav {
+            position: relative;
+            z-index: 5;
+            margin-top: 20px;
+            display: flex;
+            gap: 24px;
+        }
+
+        .nav a {
+            color: #ff00aa;
+            text-decoration: none;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            text-shadow: 0 0 8px #ff00aa;
+        }
+
+        .nav a:hover { color: #fff; }
+
+        .nothing {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            letter-spacing: 3px;
+            color: #ff00ff;
+            text-shadow: 0 0 20px #ff00ff;
+            animation: flicker 3s infinite;
+        }
+
+        @keyframes flicker {
+            0%, 94%, 100% { opacity: 1; }
+            95% { opacity: 0.2; }
+            97% { opacity: 0.8; }
+        }
+
+        .nothing-sub {
+            color: #555;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+
+    <div class="card">
+        {% if track %}
+            {% if track.album_art %}
+            <div class="album-art-wrapper">
+                <img src="{{ track.album_art }}" alt="Album Art">
+            </div>
+            {% endif %}
+            <div class="track-name">{{ track.name }}</div>
+            <div class="artist">{{ track.artists }}</div>
+            <div class="album">{{ track.album }}</div>
+            <div class="status {{ '' if track.is_playing else 'paused' }}">
+                {{ "▶ PLAYING" if track.is_playing else "⏸ PAUSED" }}
+            </div>
+            <div class="progress-wrapper">
+                <div class="progress-bar" style="width: {{ (track.progress_ms / track.duration_ms * 100) | round(1) }}%"></div>
+            </div>
+            <a class="btn" href="{{ track.spotify_url }}" target="_blank">⚡ OPEN IN SPOTIFY</a>
+        {% else %}
+            <p class="nothing">// NO SIGNAL //</p>
+            <p class="nothing-sub">START A TRACK AND REFRESH</p>
+        {% endif %}
+    </div>
+
+    <div class="nav">
+        <a href="/now-playing">↻ REFRESH</a>
+        <a href="/">⌂ HOME</a>
+        <a href="/logout">⏏ LOGOUT</a>
+    </div>
+</body>
+</html>

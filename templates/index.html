@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>🎵 RAVE FM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            min-height: 100vh;
+            background: #000;
+            overflow-x: hidden;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .scanlines {
+            pointer-events: none;
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent 0px,
+                transparent 3px,
+                rgba(0,0,0,0.15) 3px,
+                rgba(0,0,0,0.15) 4px
+            );
+            z-index: 10;
+        }
+
+        .bg-pulse {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(ellipse at center, #1a003a 0%, #000 70%);
+            animation: bgpulse 3s ease-in-out infinite alternate;
+            z-index: 0;
+        }
+
+@keyframes bgpulse {
+    from { background: radial-gradient(ellipse at center, #1a003a 0%, #000 70%); }
+    to   { background: radial-gradient(ellipse at center, #2a003a 0%, #000 70%); }
+}
+
+        .content {
+            position: relative;
+            z-index: 5;
+            text-align: center;
+            width: 100%;
+            max-width: 700px;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 3.5rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowShift 4s linear infinite;
+            filter: drop-shadow(0 0 18px #ff00ff);
+            letter-spacing: 4px;
+        }
+
+        @keyframes rainbowShift {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
+        }
+
+        .subtitle {
+            font-size: 0.85rem;
+            letter-spacing: 6px;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+            margin: 10px 0 32px;
+            animation: flicker 4s infinite;
+        }
+
+        @keyframes flicker {
+            0%, 95%, 100% { opacity: 1; }
+            96% { opacity: 0.4; }
+            97% { opacity: 1; }
+            98% { opacity: 0.2; }
+        }
+
+        /* ── Login button ── */
+        a.login-btn {
+            display: inline-block;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.95rem;
+            letter-spacing: 3px;
+            padding: 16px 36px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 700;
+            color: #000;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ff00ff);
+            background-size: 200%;
+            animation: btnShift 1.5s linear infinite;
+            box-shadow: 0 0 24px #ff00ff, 0 0 48px #00ffff44;
+            transition: transform 0.1s;
+        }
+
+        a.login-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 40px #ff00ff, 0 0 80px #00ffff88;
+        }
+
+        @keyframes btnShift {
+            0%   { background-position: 0%; }
+            100% { background-position: 200%; }
+        }
+
+        /* ── Status ── */
+        .status-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 32px;
+            font-size: 0.8rem;
+            letter-spacing: 3px;
+            color: #00ff88;
+            text-shadow: 0 0 10px #00ff88;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #00ff88;
+            box-shadow: 0 0 12px #00ff88;
+            animation: blink 1s step-start infinite;
+        }
+
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* ── Nav grid ── */
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .nav-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 20px 12px;
+            border-radius: 10px;
+            text-decoration: none;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--card-color, #ff00ff44);
+            color: #fff;
+            transition: background 0.2s, box-shadow 0.2s, transform 0.15s, border-color 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--card-color, #ff00ff);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .nav-card:hover::before { opacity: 0.07; }
+
+        .nav-card:hover {
+            border-color: var(--card-color, #ff00ff);
+            box-shadow: 0 0 20px var(--card-color, #ff00ff44);
+            transform: translateY(-2px);
+        }
+
+        .nav-card .icon {
+            font-size: 1.6rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .nav-card .label {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+            color: var(--card-color, #ff00ff);
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 0 8px var(--card-color, #ff00ff44);
+        }
+
+        .nav-card .desc {
+            font-size: 0.58rem;
+            color: #666;
+            letter-spacing: 1px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Featured card spans full width */
+        .nav-card.featured {
+            grid-column: span 3;
+            flex-direction: row;
+            gap: 16px;
+            padding: 20px 24px;
+            justify-content: center;
+        }
+
+        .nav-card.featured .icon { font-size: 2rem; }
+
+        .nav-card.featured .label {
+            font-size: 0.85rem;
+            letter-spacing: 4px;
+        }
+
+        /* Logout row */
+        .logout-row {
+            margin-top: 8px;
+        }
+
+        .logout-row a {
+            color: #333;
+            text-decoration: none;
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            transition: color 0.2s;
+        }
+
+        .logout-row a:hover { color: #ff00aa; }
+
+        @media (max-width: 500px) {
+            h1 { font-size: 2.5rem; }
+            .nav-grid { grid-template-columns: repeat(2, 1fr); }
+            .nav-card.featured { grid-column: span 2; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-pulse"></div>
+    <div class="scanlines"></div>
+
+    <div class="content">
+        <h1>RAVE FM</h1>
+        <p class="subtitle">◈ SPOTIFY INTERFACE v1.0 ◈</p>
+
+        {% if is_authenticated %}
+            <div class="status-row">
+                <div class="status-dot"></div>
+                CONNECTED
+            </div>
+
+            <div class="nav-grid">
+
+                <!-- Featured -->
+                <a href="/now-playing" class="nav-card featured" style="--card-color: #00ff88;">
+                    <div class="icon">▶</div>
+                    <div>
+                        <div class="label">NOW PLAYING</div>
+                        <div class="desc">current track</div>
+                    </div>
+                </a>
+
+                <a href="/rave" class="nav-card featured" style="--card-color: #ff00ff;">
+                    <div class="icon">🎆</div>
+                    <div>
+                        <div class="label">RAVE MODE</div>
+                        <div class="desc">Visuals</div>
+                    </div>
+                </a>
+
+                <!-- Row -->
+                <a href="/stats" class="nav-card" style="--card-color: #00ffff;">
+                    <div class="icon">◈</div>
+                    <div class="label">STATS</div>
+                    <div class="desc">listening history</div>
+                </a>
+
+                <a href="/vibe" class="nav-card" style="--card-color: #ff00aa;">
+                    <div class="icon">🎵</div>
+                    <div class="label">VIBE</div>
+                    <div class="desc">auto mood tracking</div>
+                </a>
+
+                <a href="/recap" class="nav-card" style="--card-color: #ffff00;">
+                    <div class="icon">📋</div>
+                    <div class="label">RECAP</div>
+                    <div class="desc">today's summary</div>
+                </a>
+
+                <!-- Row -->
+                <a href="/streaks" class="nav-card" style="--card-color: #ff6600;">
+                    <div class="icon">🔥</div>
+                    <div class="label">STREAKS</div>
+                    <div class="desc">keep it going</div>
+                </a>
+
+                <a href="/clock" class="nav-card" style="--card-color: #aa00ff;">
+                    <div class="icon">🕐</div>
+                    <div class="label">CLOCK</div>
+                    <div class="desc">24h activity</div>
+                </a>
+
+                <a href="/skip-heatmap" class="nav-card" style="--card-color: #ff0066;">
+                    <div class="icon">🎯</div>
+                    <div class="label">SKIP MAP</div>
+                    <div class="desc">where you bail</div>
+                </a>
+
+                <!-- Row -->
+                <a href="/evolution" class="nav-card" style="--card-color: #00ff88;">
+                    <div class="icon">🧬</div>
+                    <div class="label">EVOLUTION</div>
+                    <div class="desc">taste over time</div>
+                </a>
+
+                <a href="/avoiding" class="nav-card" style="--card-color: #ff00ff;">
+                    <div class="icon">👻</div>
+                    <div class="label">AVOIDING</div>
+                    <div class="desc">never finished</div>
+                </a>
+
+
+                <!-- Row -->
+                <a href="/queue" class="nav-card" style="--card-color: #ffff00;">
+                    <div class="icon">⚡</div>
+                    <div class="label">QUEUE</div>
+                    <div class="desc">up next</div>
+                </a>
+
+                <a href="/recently-played" class="nav-card" style="--card-color: #ff6600;">
+                    <div class="icon">⏮</div>
+                    <div class="label">RECENT</div>
+                    <div class="desc">last 50 tracks</div>
+                </a>
+
+                <a href="/search" class="nav-card" style="--card-color: #aa00ff;">
+                    <div class="icon">🔍</div>
+                    <div class="label">SEARCH</div>
+                    <div class="desc">your history</div>
+                </a>
+
+            </div>
+
+            <div class="logout-row">
+                <a href="/logout">⏏ DISCONNECT</a>
+            </div>
+
+        {% else %}
+            <a class="login-btn" href="/login">⚡ LOGIN WITH SPOTIFY</a>
+        {% endif %}
+    </div>
+</body>
+</html>

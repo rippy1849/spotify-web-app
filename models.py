@@ -1,0 +1,40 @@
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float
+from sqlalchemy.sql import func
+from database import Base
+
+
+class TrackPlay(Base):
+    __tablename__ = "track_plays"
+
+    id               = Column(Integer, primary_key=True, index=True)
+    track_id         = Column(String, nullable=False)
+    track_name       = Column(String, nullable=False)
+    artists          = Column(String, nullable=False)
+    album            = Column(String, nullable=False)
+    album_art_url    = Column(String, nullable=True)
+    duration_ms      = Column(Integer, nullable=False)
+    progress_ms      = Column(Integer, nullable=False)
+    was_skipped      = Column(Boolean, default=False)
+    listened_at      = Column(DateTime, server_default=func.now())
+    progress_pct     = Column(Float, nullable=False)
+    hour_of_day      = Column(Integer, nullable=True)
+    day_of_week      = Column(String, nullable=True)
+    month            = Column(String, nullable=True)
+    valence          = Column(Float, nullable=True)
+    energy           = Column(Float, nullable=True)
+    danceability     = Column(Float, nullable=True)
+    tempo            = Column(Float, nullable=True)
+    acousticness     = Column(Float, nullable=True)
+    instrumentalness = Column(Float, nullable=True)
+    auto_mood        = Column(String, nullable=True)
+    primary_genre    = Column(String, nullable=True)
+
+
+class ArtistCache(Base):
+    __tablename__ = "artist_cache"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    artist_name = Column(String, nullable=False)
+    track_name  = Column(String, nullable=True)
+    genres      = Column(String, nullable=True)
+    fetched_at  = Column(DateTime, server_default=func.now())

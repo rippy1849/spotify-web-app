@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>STREAKS // RAVE FM</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Share Tech Mono', monospace; min-height: 100vh; background: #000; color: #fff; padding: 40px 20px; }
+        .scanlines { pointer-events: none; position: fixed; inset: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 4px); z-index: 10; }
+        .bg { position: fixed; inset: 0; background: radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%), #000; animation: bgshift 6s ease-in-out infinite alternate; z-index: 0; }
+        @keyframes bgshift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(180deg); } }
+        .content { position: relative; z-index: 5; max-width: 900px; margin: 0 auto; }
+        h1 { font-family: 'Orbitron', sans-serif; font-size: 2.5rem; font-weight: 900; background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff); background-size: 300% 100%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: rainbowShift 4s linear infinite; filter: drop-shadow(0 0 12px #ff00ff); letter-spacing: 4px; margin-bottom: 8px; }
+        @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+        .subtitle { color: #00ffff; text-shadow: 0 0 8px #00ffff; letter-spacing: 4px; font-size: 0.75rem; margin-bottom: 40px; }
+        .nav { display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+        .nav a { color: #ff00aa; text-decoration: none; font-size: 0.75rem; letter-spacing: 2px; text-shadow: 0 0 8px #ff00aa; }
+        .nav a:hover { color: #fff; }
+        h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 4px; color: #ffff00; text-shadow: 0 0 10px #ffff0088; margin-bottom: 16px; border-bottom: 1px solid #ffff0033; padding-bottom: 8px; }
+        .streak-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 40px; }
+        .streak-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff44; border-radius: 12px; padding: 24px; text-align: center; box-shadow: 0 0 20px #ff00ff22; }
+        .streak-card.active { border-color: #00ff88; box-shadow: 0 0 30px #00ff8844; }
+        .streak-value { font-family: 'Orbitron', sans-serif; font-size: 2.5rem; font-weight: 900; color: #00ffff; text-shadow: 0 0 20px #00ffff; }
+        .streak-card.active .streak-value { color: #00ff88; text-shadow: 0 0 20px #00ff88; }
+        .streak-label { font-size: 0.65rem; letter-spacing: 3px; color: #ff00aa; margin-top: 8px; }
+        .streak-sub { font-size: 0.6rem; color: #555; margin-top: 4px; letter-spacing: 1px; }
+        .chart-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff22; border-radius: 10px; padding: 24px; margin-bottom: 40px; }
+        .chart-card canvas { max-height: 200px; }
+        .fire { font-size: 1.5rem; display: block; margin-bottom: 8px; }
+        @media (max-width: 700px) { .streak-grid { grid-template-columns: 1fr 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/stats">◈ STATS</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+
+        <h1>STREAKS</h1>
+        <p class="subtitle">◈ KEEP THE MUSIC GOING ◈</p>
+
+        <div class="streak-grid">
+            <div class="streak-card {% if current_day_streak > 0 %}active{% endif %}">
+                <span class="fire">🔥</span>
+                <div class="streak-value">{{ current_day_streak }}</div>
+                <div class="streak-label">CURRENT DAY STREAK</div>
+                <div class="streak-sub">CONSECUTIVE DAYS LISTENING</div>
+            </div>
+            <div class="streak-card">
+                <span class="fire">🏆</span>
+                <div class="streak-value">{{ longest_day_streak }}</div>
+                <div class="streak-label">LONGEST DAY STREAK</div>
+                <div class="streak-sub">ALL TIME RECORD</div>
+            </div>
+            <div class="streak-card {% if current_noskip > 10 %}active{% endif %}">
+                <span class="fire">⚡</span>
+                <div class="streak-value">{{ current_noskip }}</div>
+                <div class="streak-label">CURRENT NO-SKIP</div>
+                <div class="streak-sub">TRACKS IN A ROW</div>
+            </div>
+            <div class="streak-card">
+                <span class="fire">💎</span>
+                <div class="streak-value">{{ longest_noskip }}</div>
+                <div class="streak-label">LONGEST NO-SKIP</div>
+                <div class="streak-sub">ALL TIME RECORD</div>
+            </div>
+            <div class="streak-card">
+                <span class="fire">🎤</span>
+                <div class="streak-value">{{ best_artist_streak.count }}</div>
+                <div class="streak-label">ARTIST LOYALTY STREAK</div>
+                <div class="streak-sub">{{ best_artist_streak.artist or "N/A" }}</div>
+            </div>
+            <div class="streak-card">
+                <span class="fire">📅</span>
+                <div class="streak-value">{{ activity_rate }}%</div>
+                <div class="streak-label">ACTIVITY RATE</div>
+                <div class="streak-sub">{{ total_active_days }} DAYS WITH MUSIC</div>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <canvas id="activityChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        new Chart(document.getElementById('activityChart'), {
+            type: 'bar',
+            data: {
+                labels: {{ day_labels | tojson }},
+                datasets: [{
+                    label: 'Plays',
+                    data: {{ day_values | tojson }},
+                    backgroundColor: {{ day_values | tojson }}.map(v =>
+                        v > 0 ? '#00ff8888' : '#ffffff11'
+                    ),
+                    borderColor: {{ day_values | tojson }}.map(v =>
+                        v > 0 ? '#00ff88' : '#ffffff22'
+                    ),
+                    borderWidth: 1,
+                    borderRadius: 3,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: 'PLAYS PER DAY (LAST 30 DAYS)',
+                        color: '#ffff00',
+                        font: { family: 'Orbitron', size: 11 },
+                        padding: { bottom: 16 }
+                    },
+                    tooltip: {
+                        backgroundColor: '#111',
+                        borderColor: '#00ff88',
+                        borderWidth: 1,
+                        titleColor: '#00ffff',
+                        bodyColor: '#fff',
+                        titleFont: { family: 'Share Tech Mono' },
+                        bodyFont: { family: 'Share Tech Mono' },
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 8 }, maxRotation: 45 }, grid: { color: '#ffffff0a' } },
+                    y: { ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

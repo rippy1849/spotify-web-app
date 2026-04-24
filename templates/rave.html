@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RAVE MODE // RAVE FM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            height: 100vh;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas#raveCanvas {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+        }
+
+        .rave-ui {
+            position: relative;
+            z-index: 5;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .album-art {
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-bottom: 20px;
+            box-shadow: 0 0 40px #ff00ff;
+            animation: spin 8s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+        }
+
+        .track-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowShift 2s linear infinite;
+            letter-spacing: 3px;
+            margin-bottom: 8px;
+        }
+
+        @keyframes rainbowShift { 0% { background-position: 0%; } 100% { background-position: 300%; } }
+
+        .artist-name {
+            color: #00ffff;
+            text-shadow: 0 0 16px #00ffff;
+            font-size: 0.9rem;
+            letter-spacing: 3px;
+        }
+
+        /* ── Visual selector ── */
+        .visual-selector {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            display: flex;
+            gap: 8px;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid #ff00ff33;
+            border-radius: 99px;
+            padding: 10px 16px;
+            opacity: 0;
+            transition: opacity 0.4s;
+            pointer-events: none;
+        }
+
+        .visual-selector.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .vis-btn {
+            background: none;
+            border: 1px solid #ff00ff44;
+            border-radius: 99px;
+            padding: 6px 14px;
+            color: #ff00ff88;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.65rem;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .vis-btn:hover,
+        .vis-btn.active {
+            background: #ff00ff22;
+            border-color: #ff00ff;
+            color: #ff00ff;
+            box-shadow: 0 0 10px #ff00ff44;
+        }
+
+        .nav-rave {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            display: flex;
+            gap: 24px;
+            opacity: 0;
+            transition: opacity 0.4s;
+            pointer-events: none;
+        }
+
+        .nav-rave.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .nav-rave a {
+            color: #ff00aa88;
+            text-decoration: none;
+            font-size: 0.72rem;
+            letter-spacing: 2px;
+        }
+
+        .nav-rave a:hover { color: #fff; }
+
+        .no-signal {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            color: #ff00ff;
+            text-shadow: 0 0 20px #ff00ff;
+            letter-spacing: 4px;
+            animation: flicker 2s infinite;
+        }
+
+        @keyframes flicker {
+            0%, 94%, 100% { opacity: 1; }
+            95% { opacity: 0.1; }
+            97% { opacity: 0.8; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="raveCanvas"></canvas>
+
+    <div class="rave-ui">
+        {% if track %}
+            {% if track.album_art %}
+            <img class="album-art" src="{{ track.album_art }}" alt="Album Art" id="albumArt">
+            {% endif %}
+            <div class="track-name" id="trackName">{{ track.name }}</div>
+            <div class="artist-name" id="artistName">{{ track.artists }}</div>
+        {% else %}
+            <div class="no-signal">// NO SIGNAL //</div>
+            <p style="color:#555; font-size:0.75rem; letter-spacing:2px; margin-top:12px;">PLAY SOMETHING ON SPOTIFY</p>
+        {% endif %}
+    </div>
+
+    <div class="visual-selector" id="visualSelector">
+        <button class="vis-btn active" data-vis="plasma">PLASMA</button>
+        <button class="vis-btn" data-vis="aurora">AURORA</button>
+        <button class="vis-btn" data-vis="lava">LAVA LAMP</button>
+        <button class="vis-btn" data-vis="rain">NEON RAIN</button>
+        <button class="vis-btn" data-vis="tunnel">TUNNEL</button>
+        <button class="vis-btn" data-vis="particles">PARTICLES</button>
+        <button class="vis-btn" data-vis="lightning">LIGHTNING</button>
+        <button class="vis-btn" data-vis="kaleidoscope">KALEIDOSCOPE</button>
+    </div>
+
+    <div class="nav-rave" id="navRave">
+        <a href="/now-playing">▶ NOW PLAYING</a>
+        <a href="/">⌂ HOME</a>
+        <a href="/logout">⏏ LOGOUT</a>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('raveCanvas');
+        const ctx    = canvas.getContext('2d');
+        let W = canvas.width  = window.innerWidth;
+        let H = canvas.height = window.innerHeight;
+
+        window.addEventListener('resize', () => {
+            W = canvas.width  = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+        });
+
+        // ── Track info updater ────────────────────────────────────────────────
+        async function updateTrackInfo() {
+            try {
+                const response = await fetch('/now-playing-json');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.name) {
+                        const nameEl   = document.getElementById('trackName');
+                        const artistEl = document.getElementById('artistName');
+                        const artEl    = document.getElementById('albumArt');
+                        if (nameEl)   nameEl.textContent   = data.name;
+                        if (artistEl) artistEl.textContent = data.artists;
+                        if (artEl && data.album_art) artEl.src = data.album_art;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        setInterval(updateTrackInfo, 10000);
+
+        // ── Mouse idle detection ──────────────────────────────────────────────
+        let mouseTimer = null;
+        const selector = document.getElementById('visualSelector');
+        const navRave  = document.getElementById('navRave');
+
+        document.addEventListener('mousemove', () => {
+            selector.classList.add('visible');
+            navRave.classList.add('visible');
+            clearTimeout(mouseTimer);
+            mouseTimer = setTimeout(() => {
+                selector.classList.remove('visible');
+                navRave.classList.remove('visible');
+            }, 2000);
+        });
+
+        // ── Visual switcher ───────────────────────────────────────────────────
+        let currentVisual = 'plasma';
+        document.querySelectorAll('.vis-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.vis-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentVisual = btn.dataset.vis;
+                initVisual(currentVisual);
+            });
+        });
+
+        // ── Shared state ──────────────────────────────────────────────────────
+        let animFrame = null;
+        const neon = ['#ff00ff','#00ffff','#ffff00','#00ff88','#ff00aa','#ff6600','#aa00ff','#00aaff'];
+        const t0 = Date.now();
+        function t() { return (Date.now() - t0) / 1000; }
+        function randNeon() { return neon[Math.floor(Math.random() * neon.length)]; }
+
+        // ── PLASMA ────────────────────────────────────────────────────────────
+        function drawPlasma() {
+            const imageData = ctx.createImageData(W, H);
+            const data      = imageData.data;
+            const time      = t();
+            const scale     = 0.006;
+
+            for (let y = 0; y < H; y++) {
+                for (let x = 0; x < W; x++) {
+                    const v =
+                        Math.sin(x * scale + time) +
+                        Math.sin(y * scale + time * 0.7) +
+                        Math.sin((x + y) * scale * 0.5 + time * 1.3) +
+                        Math.sin(Math.sqrt(
+                            (x - W/2) * (x - W/2) +
+                            (y - H/2) * (y - H/2)
+                        ) * scale + time);
+
+                    const norm = (v + 4) / 8;
+                    const hue  = (norm * 360 + time * 60) % 360;
+                    const idx  = (y * W + x) * 4;
+
+                    const r = Math.sin(hue * Math.PI / 180) * 127 + 128;
+                    const g = Math.sin((hue + 120) * Math.PI / 180) * 127 + 128;
+                    const b = Math.sin((hue + 240) * Math.PI / 180) * 127 + 128;
+
+                    data[idx]     = r;
+                    data[idx + 1] = g;
+                    data[idx + 2] = b;
+                    data[idx + 3] = 255;
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+            animFrame = requestAnimationFrame(drawPlasma);
+        }
+
+        // ── AURORA ────────────────────────────────────────────────────────────
+        const auroraLayers = Array.from({length: 6}, (_, i) => ({
+            offset:    Math.random() * Math.PI * 2,
+            speed:     0.2 + Math.random() * 0.3,
+            amplitude: 60 + Math.random() * 80,
+            y:         H * (0.2 + i * 0.1),
+            color:     neon[i % neon.length],
+            width:     80 + Math.random() * 120,
+        }));
+
+        function drawAurora() {
+            ctx.fillStyle = 'rgba(0,0,0,0.08)';
+            ctx.fillRect(0, 0, W, H);
+
+            const time = t();
+            auroraLayers.forEach(layer => {
+                ctx.beginPath();
+                ctx.moveTo(0, layer.y);
+                for (let x = 0; x <= W; x += 4) {
+                    const wave =
+                        Math.sin(x * 0.003 + time * layer.speed + layer.offset) * layer.amplitude +
+                        Math.sin(x * 0.007 + time * layer.speed * 0.5) * layer.amplitude * 0.4;
+                    ctx.lineTo(x, layer.y + wave);
+                }
+                ctx.lineTo(W, H);
+                ctx.lineTo(0, H);
+                ctx.closePath();
+
+                const grad = ctx.createLinearGradient(0, layer.y - layer.width, 0, layer.y + layer.width);
+                grad.addColorStop(0, layer.color + '00');
+                grad.addColorStop(0.5, layer.color + '44');
+                grad.addColorStop(1, layer.color + '00');
+                ctx.fillStyle = grad;
+                ctx.fill();
+            });
+
+            animFrame = requestAnimationFrame(drawAurora);
+        }
+
+        // ── LAVA LAMP ─────────────────────────────────────────────────────────
+        const blobs = Array.from({length: 8}, (_, i) => ({
+            x:     W * Math.random(),
+            y:     H * Math.random(),
+            vx:    (Math.random() - 0.5) * 1.2,
+            vy:    (Math.random() - 0.5) * 1.2,
+            r:     60 + Math.random() * 80,
+            color: neon[i % neon.length],
+            phase: Math.random() * Math.PI * 2,
+        }));
+
+        function drawLava() {
+            ctx.fillStyle = 'rgba(0,0,0,0.15)';
+            ctx.fillRect(0, 0, W, H);
+
+            const time = t();
+            blobs.forEach(blob => {
+                blob.x += blob.vx;
+                blob.y += blob.vy;
+                if (blob.x < -blob.r) blob.x = W + blob.r;
+                if (blob.x > W + blob.r) blob.x = -blob.r;
+                if (blob.y < -blob.r) blob.y = H + blob.r;
+                if (blob.y > H + blob.r) blob.y = -blob.r;
+
+                const pulse = blob.r + Math.sin(time * 1.5 + blob.phase) * 20;
+                const grad  = ctx.createRadialGradient(blob.x, blob.y, 0, blob.x, blob.y, pulse);
+                grad.addColorStop(0, blob.color + 'cc');
+                grad.addColorStop(0.5, blob.color + '66');
+                grad.addColorStop(1, blob.color + '00');
+
+                ctx.beginPath();
+                ctx.arc(blob.x, blob.y, pulse, 0, Math.PI * 2);
+                ctx.fillStyle = grad;
+                ctx.fill();
+            });
+
+            animFrame = requestAnimationFrame(drawLava);
+        }
+
+        // ── NEON RAIN ─────────────────────────────────────────────────────────
+        const COLS     = Math.floor(W / 18);
+        const drops    = Array.from({length: COLS}, () => Math.random() * -100);
+        const charSets = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ♦♠♥♣◈⚡✦★◆'.split('');
+
+        function drawRain() {
+            ctx.fillStyle = 'rgba(0,0,0,0.05)';
+            ctx.fillRect(0, 0, W, H);
+
+            drops.forEach((y, i) => {
+                const color = neon[i % neon.length];
+                const char  = charSets[Math.floor(Math.random() * charSets.length)];
+                const x     = i * 18;
+
+                ctx.fillStyle   = '#fff';
+                ctx.shadowColor = color;
+                ctx.shadowBlur  = 8;
+                ctx.font        = '14px Share Tech Mono';
+                ctx.fillText(char, x, y);
+
+                ctx.fillStyle  = color + 'aa';
+                ctx.shadowBlur = 4;
+                for (let j = 1; j < 8; j++) {
+                    ctx.fillText(charSets[Math.floor(Math.random() * charSets.length)], x, y - j * 18);
+                }
+
+                drops[i] += 18;
+                if (drops[i] > H + 100) drops[i] = Math.random() * -200;
+            });
+
+            ctx.shadowBlur = 0;
+            animFrame = requestAnimationFrame(drawRain);
+        }
+
+        // ── TUNNEL ────────────────────────────────────────────────────────────
+        function drawTunnel() {
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.fillRect(0, 0, W, H);
+
+            const time  = t();
+            const cx    = W / 2 + Math.sin(time * 0.3) * 80;
+            const cy    = H / 2 + Math.cos(time * 0.2) * 60;
+            const rings = 24;
+
+            for (let i = rings; i >= 0; i--) {
+                const progress = i / rings;
+                const radius   = progress * Math.max(W, H) * 0.8;
+                const hue      = (i * 25 + time * 80) % 360;
+                const color    = `hsl(${hue}, 100%, 60%)`;
+                const twist    = time * 2 + i * 0.3;
+
+                ctx.beginPath();
+                const sides = 6;
+                for (let s = 0; s <= sides; s++) {
+                    const angle = (s / sides) * Math.PI * 2 + twist;
+                    const px    = cx + Math.cos(angle) * radius;
+                    const py    = cy + Math.sin(angle) * radius;
+                    s === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.strokeStyle = color;
+                ctx.lineWidth   = 1.5;
+                ctx.shadowColor = color;
+                ctx.shadowBlur  = 10;
+                ctx.stroke();
+            }
+
+            ctx.shadowBlur = 0;
+            animFrame = requestAnimationFrame(drawTunnel);
+        }
+
+        // ── PARTICLES ─────────────────────────────────────────────────────────
+        const particles = Array.from({length: 120}, (_, i) => ({
+            x:     Math.random() * W,
+            y:     Math.random() * H,
+            vx:    (Math.random() - 0.5) * 1.5,
+            vy:    (Math.random() - 0.5) * 1.5,
+            r:     1.5 + Math.random() * 2.5,
+            color: neon[i % neon.length],
+        }));
+
+        function drawParticles() {
+            ctx.fillStyle = 'rgba(0,0,0,0.12)';
+            ctx.fillRect(0, 0, W, H);
+
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if (p.x < 0 || p.x > W) p.vx *= -1;
+                if (p.y < 0 || p.y > H) p.vy *= -1;
+            });
+
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx   = particles[i].x - particles[j].x;
+                    const dy   = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 140) {
+                        const alpha = (1 - dist / 140) * 0.6;
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.strokeStyle = particles[i].color + Math.floor(alpha * 255).toString(16).padStart(2,'0');
+                        ctx.lineWidth   = 0.8;
+                        ctx.shadowColor = particles[i].color;
+                        ctx.shadowBlur  = 4;
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            particles.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle   = p.color;
+                ctx.shadowColor = p.color;
+                ctx.shadowBlur  = 12;
+                ctx.fill();
+            });
+
+            ctx.shadowBlur = 0;
+            animFrame = requestAnimationFrame(drawParticles);
+        }
+
+        // ── LIGHTNING ─────────────────────────────────────────────────────────
+        const bolts = [];
+        let boltTimer = 0;
+
+        function createBolt(x1, y1, x2, y2, depth, color) {
+            if (depth <= 0) return;
+            const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * 80;
+            const my = (y1 + y2) / 2 + (Math.random() - 0.5) * 80;
+            bolts.push({x1, y1, x2: mx, y2: my, color, alpha: 1, depth});
+            bolts.push({x1: mx, y1: my, x2, y2, color, alpha: 1, depth});
+            if (Math.random() < 0.4) {
+                const bx = mx + (Math.random() - 0.5) * 200;
+                const by = my + Math.random() * 200;
+                createBolt(mx, my, bx, by, depth - 1, color);
+            }
+            if (depth > 1) {
+                createBolt(x1, y1, mx, my, depth - 1, color);
+                createBolt(mx, my, x2, y2, depth - 1, color);
+            }
+        }
+
+        function drawLightning() {
+            ctx.fillStyle = 'rgba(0,0,0,0.18)';
+            ctx.fillRect(0, 0, W, H);
+
+            boltTimer++;
+            if (boltTimer > 15 + Math.random() * 20) {
+                boltTimer = 0;
+                bolts.length = 0;
+                const color = randNeon();
+                createBolt(Math.random() * W, 0, Math.random() * W, H, 5, color);
+                if (Math.random() < 0.4) {
+                    createBolt(0, Math.random() * H, W, Math.random() * H, 4, randNeon());
+                }
+            }
+
+            bolts.forEach(bolt => {
+                bolt.alpha -= 0.025;
+                if (bolt.alpha <= 0) return;
+                ctx.beginPath();
+                ctx.moveTo(bolt.x1, bolt.y1);
+                ctx.lineTo(bolt.x2, bolt.y2);
+                ctx.strokeStyle = bolt.color + Math.floor(bolt.alpha * 255).toString(16).padStart(2,'0');
+                ctx.lineWidth   = bolt.depth * 0.8;
+                ctx.shadowColor = bolt.color;
+                ctx.shadowBlur  = 20;
+                ctx.stroke();
+            });
+
+            ctx.shadowBlur = 0;
+            animFrame = requestAnimationFrame(drawLightning);
+        }
+
+        // ── KALEIDOSCOPE ──────────────────────────────────────────────────────
+        function drawKaleidoscope() {
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.fillRect(0, 0, W, H);
+
+            const time   = t();
+            const cx     = W / 2;
+            const cy     = H / 2;
+            const slices = 12;
+            const sliceAngle = (Math.PI * 2) / slices;
+
+            ctx.save();
+            ctx.translate(cx, cy);
+
+            for (let s = 0; s < slices; s++) {
+                ctx.save();
+                ctx.rotate(s * sliceAngle + time * 0.2);
+
+                for (let i = 0; i < 6; i++) {
+                    const r     = 40 + i * 40 + Math.sin(time * 0.8 + i) * 20;
+                    const angle = time * (0.5 + i * 0.15) + i * 1.2;
+                    const x     = Math.cos(angle) * r;
+                    const y     = Math.sin(angle) * r;
+                    const size  = 8 + Math.sin(time * 2 + i) * 6;
+                    const color = neon[(s + i + Math.floor(time)) % neon.length];
+
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fillStyle   = color + 'cc';
+                    ctx.shadowColor = color;
+                    ctx.shadowBlur  = 16;
+                    ctx.fill();
+
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(x, y);
+                    ctx.strokeStyle = color + '44';
+                    ctx.lineWidth   = 1;
+                    ctx.shadowBlur  = 8;
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+
+            ctx.restore();
+            ctx.shadowBlur = 0;
+            animFrame = requestAnimationFrame(drawKaleidoscope);
+        }
+
+        // ── Visual router ─────────────────────────────────────────────────────
+        const visuals = {
+            plasma:       drawPlasma,
+            aurora:       drawAurora,
+            lava:         drawLava,
+            rain:         drawRain,
+            tunnel:       drawTunnel,
+            particles:    drawParticles,
+            lightning:    drawLightning,
+            kaleidoscope: drawKaleidoscope,
+        };
+
+        function initVisual(name) {
+            if (animFrame) cancelAnimationFrame(animFrame);
+            ctx.clearRect(0, 0, W, H);
+            visuals[name]();
+        }
+
+        initVisual('plasma');
+    </script>
+</body>
+</html>

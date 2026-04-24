@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LISTENING CLOCK // RAVE FM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            min-height: 100vh;
+            background: #000;
+            color: #fff;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .scanlines {
+            pointer-events: none;
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent 0px,
+                transparent 3px,
+                rgba(0,0,0,0.12) 3px,
+                rgba(0,0,0,0.12) 4px
+            );
+            z-index: 10;
+        }
+
+        .bg {
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%),
+                #000;
+            animation: bgshift 6s ease-in-out infinite alternate;
+            z-index: 0;
+        }
+
+        @keyframes bgshift {
+            from { filter: hue-rotate(0deg); }
+            to   { filter: hue-rotate(180deg); }
+        }
+
+        .content {
+            position: relative;
+            z-index: 5;
+            max-width: 700px;
+            width: 100%;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowShift 4s linear infinite;
+            filter: drop-shadow(0 0 12px #ff00ff);
+            letter-spacing: 4px;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        @keyframes rainbowShift {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
+        }
+
+        .subtitle {
+            color: #00ffff;
+            text-shadow: 0 0 8px #00ffff;
+            letter-spacing: 4px;
+            font-size: 0.75rem;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .nav {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .nav a {
+            color: #ff00aa;
+            text-decoration: none;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            text-shadow: 0 0 8px #ff00aa;
+        }
+
+        .nav a:hover { color: #fff; }
+
+        .clock-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+
+        canvas#clockCanvas {
+            filter: drop-shadow(0 0 20px #ff00ff55);
+        }
+
+        .legend {
+            display: flex;
+            gap: 24px;
+            justify-content: center;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.72rem;
+            letter-spacing: 2px;
+            color: #aaa;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .tooltip-box {
+            position: fixed;
+            background: #111;
+            border: 1px solid #ff00ff;
+            border-radius: 6px;
+            padding: 10px 14px;
+            font-size: 0.72rem;
+            letter-spacing: 1px;
+            color: #fff;
+            pointer-events: none;
+            display: none;
+            z-index: 100;
+            box-shadow: 0 0 16px #ff00ff44;
+        }
+
+        .tooltip-box .t-hour  { color: #ffff00; margin-bottom: 4px; font-family: 'Orbitron', sans-serif; font-size: 0.8rem; }
+        .tooltip-box .t-plays { color: #00ffff; }
+        .tooltip-box .t-skip  { color: #ff00aa; }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/stats">◈ STATS</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+
+        <h1>LISTENING CLOCK</h1>
+        <p class="subtitle">◈ 24 HOUR ACTIVITY ◈</p>
+
+        <div class="clock-container">
+            <canvas id="clockCanvas" width="500" height="500"></canvas>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-dot" style="background:#ff00ff;"></div>
+                PLAYS (bar length)
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background:#ff00aa;"></div>
+                HIGH SKIP RATE
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background:#00ff88;"></div>
+                LOW SKIP RATE
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip-box" id="tooltip">
+        <div class="t-hour" id="tt-hour"></div>
+        <div class="t-plays" id="tt-plays"></div>
+        <div class="t-skip" id="tt-skip"></div>
+    </div>
+
+    <script>
+        const hourValues    = {{ hour_values | tojson }};
+        const hourSkipRates = {{ hour_skip_rates | tojson }};
+        const maxPlays      = {{ max_plays }};
+
+        const canvas  = document.getElementById('clockCanvas');
+        const ctx     = canvas.getContext('2d');
+        const cx      = canvas.width / 2;
+        const cy      = canvas.height / 2;
+        const innerR  = 80;
+        const outerR  = 200;
+        const tooltip = document.getElementById('tooltip');
+
+        const segmentData = [];
+
+        function drawClock() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Outer ring glow
+            ctx.beginPath();
+            ctx.arc(cx, cy, outerR + 10, 0, Math.PI * 2);
+            ctx.strokeStyle = '#ff00ff22';
+            ctx.lineWidth = 20;
+            ctx.stroke();
+
+            // Inner circle
+            ctx.beginPath();
+            ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fill();
+            ctx.strokeStyle = '#ff00ff44';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            const sliceAngle = (Math.PI * 2) / 24;
+
+            for (let h = 0; h < 24; h++) {
+                const startAngle = h * sliceAngle - Math.PI / 2;
+                const endAngle   = startAngle + sliceAngle;
+                const plays      = hourValues[h];
+                const skipRate   = hourSkipRates[h];
+
+                const ratio    = maxPlays > 0 ? plays / maxPlays : 0;
+                const barLen   = ratio * (outerR - innerR);
+                const barOuter = innerR + barLen;
+
+                // Color based on skip rate
+                const r = Math.round(skipRate / 100 * 255);
+                const g = Math.round((1 - skipRate / 100) * 255);
+                const color = plays > 0
+                    ? `rgba(${r + 100}, ${g}, ${Math.floor(255 - r / 2)}, 0.85)`
+                    : '#ffffff08';
+
+                // Draw segment
+                ctx.beginPath();
+                ctx.moveTo(
+                    cx + Math.cos(startAngle) * innerR,
+                    cy + Math.sin(startAngle) * innerR
+                );
+                ctx.arc(cx, cy, barOuter, startAngle, endAngle);
+                ctx.arc(cx, cy, innerR, endAngle, startAngle, true);
+                ctx.closePath();
+                ctx.fillStyle = color;
+                ctx.fill();
+
+                if (plays > 0) {
+                    ctx.strokeStyle = color.replace('0.85', '1');
+                    ctx.lineWidth = 0.5;
+                    ctx.stroke();
+                }
+
+                // Store segment bounds for hover
+                segmentData.push({ h, startAngle, endAngle, innerR, barOuter });
+
+                // Hour labels
+                const labelAngle  = startAngle + sliceAngle / 2;
+                const labelRadius = outerR + 22;
+                const lx = cx + Math.cos(labelAngle) * labelRadius;
+                const ly = cy + Math.sin(labelAngle) * labelRadius;
+
+                ctx.fillStyle = plays > 0 ? '#ff00ff99' : '#333';
+                ctx.font = '9px Share Tech Mono';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`${h.toString().padStart(2,'0')}`, lx, ly);
+            }
+
+            // Center label
+            ctx.fillStyle = '#ff00ff';
+            ctx.font = 'bold 13px Orbitron';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('24H', cx, cy - 8);
+            ctx.fillStyle = '#00ffff88';
+            ctx.font = '9px Share Tech Mono';
+            ctx.fillText('ACTIVITY', cx, cy + 8);
+        }
+
+        drawClock();
+
+        // Hover tooltip
+        canvas.addEventListener('mousemove', (e) => {
+            const rect  = canvas.getBoundingClientRect();
+            const mx    = e.clientX - rect.left - cx;
+            const my    = e.clientY - rect.top  - cy;
+            const dist  = Math.sqrt(mx * mx + my * my);
+            let   angle = Math.atan2(my, mx);
+
+            if (dist < innerR || dist > outerR + 10) {
+                tooltip.style.display = 'none';
+                return;
+            }
+
+            // Normalize angle to 0..2PI starting from -PI/2
+            let normAngle = angle + Math.PI / 2;
+            if (normAngle < 0) normAngle += Math.PI * 2;
+
+            const h = Math.floor(normAngle / (Math.PI * 2) * 24);
+            const plays    = hourValues[h] || 0;
+            const skipRate = hourSkipRates[h] || 0;
+
+            document.getElementById('tt-hour').textContent  = `${h.toString().padStart(2,'0')}:00 — ${(h+1).toString().padStart(2,'0')}:00`;
+            document.getElementById('tt-plays').textContent = `▶ ${plays} PLAYS`;
+            document.getElementById('tt-skip').textContent  = `⏭ ${skipRate}% SKIP RATE`;
+
+            tooltip.style.display = 'block';
+            tooltip.style.left    = (e.clientX + 14) + 'px';
+            tooltip.style.top     = (e.clientY - 10) + 'px';
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            tooltip.style.display = 'none';
+        });
+    </script>
+</body>
+</html>

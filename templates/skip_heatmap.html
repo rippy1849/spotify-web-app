@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SKIP HEATMAP // RAVE FM</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            min-height: 100vh;
+            background: #000;
+            color: #fff;
+            padding: 40px 20px;
+        }
+        .scanlines {
+            pointer-events: none;
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 4px);
+            z-index: 10;
+        }
+        .bg {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%), #000;
+            animation: bgshift 6s ease-in-out infinite alternate;
+            z-index: 0;
+        }
+        @keyframes bgshift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(180deg); } }
+        .content { position: relative; z-index: 5; max-width: 900px; margin: 0 auto; }
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowShift 4s linear infinite;
+            filter: drop-shadow(0 0 12px #ff00ff);
+            letter-spacing: 4px;
+            margin-bottom: 8px;
+        }
+        @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+        .subtitle { color: #00ffff; text-shadow: 0 0 8px #00ffff; letter-spacing: 4px; font-size: 0.75rem; margin-bottom: 40px; }
+        .nav { display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+        .nav a { color: #ff00aa; text-decoration: none; font-size: 0.75rem; letter-spacing: 2px; text-shadow: 0 0 8px #ff00aa; }
+        .nav a:hover { color: #fff; }
+        h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            letter-spacing: 4px;
+            color: #ffff00;
+            text-shadow: 0 0 10px #ffff0088;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #ffff0033;
+            padding-bottom: 8px;
+        }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 40px; }
+        .stat-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff44; border-radius: 10px; padding: 20px; text-align: center; }
+        .stat-value { font-family: 'Orbitron', sans-serif; font-size: 1.6rem; font-weight: 900; color: #00ffff; text-shadow: 0 0 16px #00ffff; }
+        .stat-label { font-size: 0.62rem; letter-spacing: 2px; color: #ff00aa; margin-top: 6px; }
+        .chart-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff22; border-radius: 10px; padding: 24px; margin-bottom: 40px; }
+        .chart-card canvas { max-height: 300px; }
+        .section { margin-bottom: 40px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+        th { text-align: left; color: #ff00aa; letter-spacing: 2px; font-size: 0.65rem; padding: 8px 10px; border-bottom: 1px solid #ff00aa33; }
+        td { padding: 8px 10px; border-bottom: 1px solid #ffffff0a; color: #ccc; }
+        tr:hover td { background: #ffffff08; }
+        @media (max-width: 700px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/stats">◈ STATS</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+
+        <h1>SKIP HEATMAP</h1>
+        <p class="subtitle">◈ WHERE DO YOU BAIL? ◈</p>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_skips }}</div>
+                <div class="stat-label">TOTAL SKIPS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ early_skips }}</div>
+                <div class="stat-label">EARLY (&lt;20%)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ mid_skips }}</div>
+                <div class="stat-label">MID (20-50%)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ late_skips }}</div>
+                <div class="stat-label">LATE (&gt;50%)</div>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <canvas id="heatmapChart"></canvas>
+        </div>
+
+        <div class="section">
+            <h2>🎯 TOP SKIPPED TRACK PER ZONE</h2>
+            <table>
+                <thead>
+                    <tr><th>ZONE</th><th>TRACK</th><th>SKIPS</th></tr>
+                </thead>
+                <tbody>
+                    {% for zone, data in top_per_bucket.items() %}
+                    <tr>
+                        <td style="color:#ffff00;">{{ zone }}</td>
+                        <td>{{ data.track }}</td>
+                        <td style="color:#ff00aa;">{{ data.count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        new Chart(document.getElementById('heatmapChart'), {
+            type: 'bar',
+            data: {
+                labels: {{ bucket_labels | tojson }},
+                datasets: [{
+                    label: 'Skips',
+                    data: {{ bucket_values | tojson }},
+                    backgroundColor: {{ bucket_values | tojson }}.map((v, i) => {
+                        const intensity = i / {{ bucket_values | length }};
+                        return `rgba(${Math.round(255 * intensity)}, ${Math.round(255 * (1 - intensity))}, 255, 0.8)`;
+                    }),
+                    borderColor: '#ff00ff',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: 'SKIPS BY SONG PROGRESS %',
+                        color: '#ffff00',
+                        font: { family: 'Orbitron', size: 11 },
+                        padding: { bottom: 16 }
+                    },
+                    tooltip: {
+                        backgroundColor: '#111',
+                        borderColor: '#ff00ff',
+                        borderWidth: 1,
+                        titleColor: '#00ffff',
+                        bodyColor: '#fff',
+                        titleFont: { family: 'Share Tech Mono' },
+                        bodyFont: { family: 'Share Tech Mono' },
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } },
+                    y: { ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

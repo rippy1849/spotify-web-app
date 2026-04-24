@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>STATS // RAVE FM</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            min-height: 100vh;
+            background: #000;
+            color: #fff;
+            padding: 40px 20px;
+        }
+
+        .scanlines {
+            pointer-events: none;
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent 0px,
+                transparent 3px,
+                rgba(0,0,0,0.12) 3px,
+                rgba(0,0,0,0.12) 4px
+            );
+            z-index: 10;
+        }
+
+        .bg {
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%),
+                #000;
+            animation: bgshift 6s ease-in-out infinite alternate;
+            z-index: 0;
+        }
+
+        @keyframes bgshift {
+            from { filter: hue-rotate(0deg); }
+            to   { filter: hue-rotate(180deg); }
+        }
+
+        .content {
+            position: relative;
+            z-index: 5;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowShift 4s linear infinite;
+            filter: drop-shadow(0 0 12px #ff00ff);
+            letter-spacing: 4px;
+            margin-bottom: 8px;
+        }
+
+        @keyframes rainbowShift {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
+        }
+
+        .subtitle {
+            color: #00ffff;
+            text-shadow: 0 0 8px #00ffff;
+            letter-spacing: 4px;
+            font-size: 0.75rem;
+            margin-bottom: 40px;
+        }
+
+        /* ── Stat cards ── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff44;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 0 20px #ff00ff22;
+        }
+
+        .stat-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 900;
+            color: #00ffff;
+            text-shadow: 0 0 16px #00ffff;
+        }
+
+        .stat-label {
+            font-size: 0.62rem;
+            letter-spacing: 2px;
+            color: #ff00aa;
+            margin-top: 6px;
+        }
+
+        /* ── Sections ── */
+        .section {
+            margin-bottom: 48px;
+        }
+
+        h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            letter-spacing: 4px;
+            color: #ffff00;
+            text-shadow: 0 0 10px #ffff0088;
+            margin-bottom: 14px;
+            border-bottom: 1px solid #ffff0033;
+            padding-bottom: 8px;
+        }
+
+        /* ── Two column layout ── */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        /* ── Tables ── */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.78rem;
+        }
+
+        th {
+            text-align: left;
+            color: #ff00aa;
+            letter-spacing: 2px;
+            font-size: 0.65rem;
+            padding: 8px 10px;
+            border-bottom: 1px solid #ff00aa33;
+        }
+
+        td {
+            padding: 7px 10px;
+            border-bottom: 1px solid #ffffff0a;
+            color: #ccc;
+        }
+
+        tr:hover td { background: #ffffff08; }
+
+        .skipped-badge {
+            display: inline-block;
+            background: #ff00aa22;
+            color: #ff00aa;
+            border: 1px solid #ff00aa55;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+        }
+
+        .played-badge {
+            display: inline-block;
+            background: #00ff8822;
+            color: #00ff88;
+            border: 1px solid #00ff8855;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+        }
+
+        /* ── Charts ── */
+        .chart-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff22;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 0 20px #ff00ff11;
+        }
+
+        .chart-card canvas {
+            max-height: 260px;
+        }
+
+        /* ── Nav ── */
+        .nav {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .nav a {
+            color: #ff00aa;
+            text-decoration: none;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            text-shadow: 0 0 8px #ff00aa;
+        }
+
+        .nav a:hover { color: #fff; }
+
+        @media (max-width: 700px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .two-col    { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+
+        <h1>STATS</h1>
+        <p class="subtitle">◈ YOUR LISTENING HISTORY ◈</p>
+
+        <!-- ── Totals ── -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_plays }}</div>
+                <div class="stat-label">TOTAL PLAYS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ total_skips }}</div>
+                <div class="stat-label">TOTAL SKIPS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ skip_rate }}%</div>
+                <div class="stat-label">SKIP RATE</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ total_hours }}h</div>
+                <div class="stat-label">HOURS LISTENED</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ unique_tracks }}</div>
+                <div class="stat-label">UNIQUE TRACKS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ unique_artists }}</div>
+                <div class="stat-label">UNIQUE ARTISTS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ avg_skip_pct }}%</div>
+                <div class="stat-label">AVG SKIP POINT</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ longest_streak }}</div>
+                <div class="stat-label">LONGEST NO-SKIP STREAK</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ busiest_day }}</div>
+                <div class="stat-label">BUSIEST DAY ({{ busiest_day_cnt }} PLAYS)</div>
+            </div>
+        </div>
+
+        <!-- ── Charts: Hour of day ── -->
+        <div class="section">
+            <h2>🕐 LISTENING BY HOUR OF DAY</h2>
+            <div class="two-col">
+                <div class="chart-card">
+                    <canvas id="hourChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <canvas id="hourSkipChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Charts: Day of week + Month ── -->
+        <div class="section">
+            <h2>📅 LISTENING BY DAY & MONTH</h2>
+            <div class="two-col">
+                <div class="chart-card">
+                    <canvas id="dowChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <canvas id="monthChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── This week ── -->
+        <div class="section">
+            <h2>⚡ THIS WEEK</h2>
+            <div class="two-col">
+                <div>
+                    <h2 style="font-size:0.7rem; margin-bottom:10px;">TOP TRACKS</h2>
+                    <table>
+                        <thead><tr><th>#</th><th>TRACK</th><th>ARTIST</th><th>PLAYS</th></tr></thead>
+                        <tbody>
+                            {% for row in top_tracks_week %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ row.track_name }}</td>
+                                <td>{{ row.artists }}</td>
+                                <td>{{ row.plays }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <h2 style="font-size:0.7rem; margin-bottom:10px;">TOP ARTISTS</h2>
+                    <table>
+                        <thead><tr><th>#</th><th>ARTIST</th><th>PLAYS</th></tr></thead>
+                        <tbody>
+                            {% for row in top_artists_week %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ row.artists }}</td>
+                                <td>{{ row.plays }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Tracks ── -->
+        <div class="section">
+            <h2>🎵 TRACKS</h2>
+            <div class="two-col">
+                <div>
+                    <h2 style="font-size:0.7rem; margin-bottom:10px;">MOST PLAYED</h2>
+                    <table>
+                        <thead><tr><th>#</th><th>TRACK</th><th>ARTIST</th><th>PLAYS</th></tr></thead>
+                        <tbody>
+                            {% for row in most_played %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ row.track_name }}</td>
+                                <td>{{ row.artists }}</td>
+                                <td>{{ row.plays }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <h2 style="font-size:0.7rem; margin-bottom:10px;">MOST SKIPPED</h2>
+                    <table>
+                        <thead><tr><th>#</th><th>TRACK</th><th>ARTIST</th><th>SKIPS</th></tr></thead>
+                        <tbody>
+                            {% for row in most_skipped %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ row.track_name }}</td>
+                                <td>{{ row.artists }}</td>
+                                <td>{{ row.skips }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Always completed ── -->
+        <div class="section">
+            <h2>💚 TRACKS YOU ALWAYS COMPLETE (3+ PLAYS, 0 SKIPS)</h2>
+            <table>
+                <thead><tr><th>#</th><th>TRACK</th><th>ARTIST</th><th>PLAYS</th></tr></thead>
+                <tbody>
+                    {% for row in always_completed %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ row.track_name }}</td>
+                        <td>{{ row.artists }}</td>
+                        <td>{{ row.plays }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ── Artists ── -->
+        <div class="section">
+            <h2>🎤 ARTISTS</h2>
+            <div class="two-col">
+                <div>
+                    <h2 style="font-size:0.7rem; margin-bottom:10px;">MOST PLAYED</h2>
+                    <table>
+                        <thead><tr><th>#</th><th>ARTIST</th><th>PLAYS</th></tr></thead>
+                        <tbody>
+                            {% for row in most_played_artists %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ row.artists }}</td>
+                                <td>{{ row.plays }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <h2 style="font-size:0.7rem; margin-bottom:10px;">MOST SKIPPED</h2>
+                    <table>
+                        <thead><tr><th>#</th><th>ARTIST</th><th>SKIPS</th></tr></thead>
+                        <tbody>
+                            {% for row in most_skipped_artists %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ row.artists }}</td>
+                                <td>{{ row.skips }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Best artists by skip rate ── -->
+        <div class="section">
+            <h2>🏆 MOST LOVED ARTISTS (LOWEST SKIP RATE, MIN 5 PLAYS)</h2>
+            <table>
+                <thead><tr><th>#</th><th>ARTIST</th><th>PLAYS</th><th>SKIPS</th><th>SKIP RATE</th></tr></thead>
+                <tbody>
+                    {% for row in best_artists %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ row.artists }}</td>
+                        <td>{{ row.plays }}</td>
+                        <td>{{ row.skips }}</td>
+                        <td>{{ "%.1f"|format(row.skip_rate) }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ── Albums ── -->
+        <div class="section">
+            <h2>💿 ALBUMS</h2>
+            <div class="two-col">
+                <div>
+                    <h2 style="font-size:0.7rem; margin-bottom:10px;">MOST PLAYED</h2>
+                    <table>
+                        <thead><tr><th>#</th><th>ALBUM</th><th>ARTIST</th><th>PLAYS</th></tr></thead>
+                        <tbody>
+                            {% for row in most_played_albums %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ row.album }}</td>
+                                <td>{{ row.artists }}</td>
+                                <td>{{ row.plays }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <h2 style="font-size:0.7rem; margin-bottom:10px;">MOST SKIPPED</h2>
+                    <table>
+                        <thead><tr><th>#</th><th>ALBUM</th><th>ARTIST</th><th>SKIPS</th></tr></thead>
+                        <tbody>
+                            {% for row in most_skipped_albums %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ row.album }}</td>
+                                <td>{{ row.artists }}</td>
+                                <td>{{ row.skips }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Recent history ── -->
+        <div class="section">
+            <h2>🕓 RECENT HISTORY</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>TRACK</th><th>ARTIST</th><th>ALBUM</th>
+                        <th>PROGRESS</th><th>STATUS</th><th>TIME</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for play in recent %}
+                    <tr>
+                        <td>{{ play.track_name }}</td>
+                        <td>{{ play.artists }}</td>
+                        <td>{{ play.album }}</td>
+                        <td>{{ 100 if play.progress_pct >= 95 else play.progress_pct | round(1) }}%</td>
+                        <td>
+                            {% if play.was_skipped %}
+                                <span class="skipped-badge">SKIPPED</span>
+                            {% else %}
+                                <span class="played-badge">PLAYED</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ play.listened_at.strftime("%m/%d %H:%M") }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </div><!-- end .content -->
+
+    <script>
+        const neonColors = ['#ff00ff','#00ffff','#ffff00','#00ff88','#ff00aa','#ff6600','#aa00ff','#00aaff'];
+
+        const chartDefaults = {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#111',
+                    borderColor: '#ff00ff',
+                    borderWidth: 1,
+                    titleColor: '#00ffff',
+                    bodyColor: '#fff',
+                    titleFont: { family: 'Share Tech Mono' },
+                    bodyFont:  { family: 'Share Tech Mono' },
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 9 }, maxRotation: 45 },
+                    grid:  { color: '#ffffff0a' }
+                },
+                y: {
+                    ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } },
+                    grid:  { color: '#ffffff0a' }
+                }
+            }
+        };
+
+        // Hour of day - plays
+        new Chart(document.getElementById('hourChart'), {
+            type: 'bar',
+            data: {
+                labels: {{ hour_labels | tojson }},
+                datasets: [{
+                    label: 'Plays',
+                    data: {{ hour_values | tojson }},
+                    backgroundColor: '#ff00ff88',
+                    borderColor: '#ff00ff',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                }]
+            },
+            options: { ...chartDefaults, plugins: { ...chartDefaults.plugins,
+                title: { display: true, text: 'PLAYS BY HOUR', color: '#ffff00',
+                         font: { family: 'Orbitron', size: 10 }, padding: { bottom: 10 } }
+            }}
+        });
+
+        // Hour of day - skip rate
+        new Chart(document.getElementById('hourSkipChart'), {
+            type: 'bar',
+            data: {
+                labels: {{ hour_labels | tojson }},
+                datasets: [{
+                    label: 'Skip Rate %',
+                    data: {{ hour_skip_values | tojson }},
+                    backgroundColor: '#ff00aa88',
+                    borderColor: '#ff00aa',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                }]
+            },
+            options: { ...chartDefaults, plugins: { ...chartDefaults.plugins,
+                title: { display: true, text: 'SKIP RATE % BY HOUR', color: '#ffff00',
+                         font: { family: 'Orbitron', size: 10 }, padding: { bottom: 10 } }
+            }}
+        });
+
+        // Day of week
+        new Chart(document.getElementById('dowChart'), {
+            type: 'bar',
+            data: {
+                labels: {{ dow_order | tojson }},
+                datasets: [{
+                    label: 'Plays',
+                    data: {{ dow_values | tojson }},
+                    backgroundColor: '#00ffff88',
+                    borderColor: '#00ffff',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                }]
+            },
+            options: { ...chartDefaults, plugins: { ...chartDefaults.plugins,
+                title: { display: true, text: 'PLAYS BY DAY OF WEEK', color: '#ffff00',
+                         font: { family: 'Orbitron', size: 10 }, padding: { bottom: 10 } }
+            }}
+        });
+
+        // Month
+        new Chart(document.getElementById('monthChart'), {
+            type: 'bar',
+            data: {
+                labels: {{ month_order | tojson }},
+                datasets: [{
+                    label: 'Plays',
+                    data: {{ month_values | tojson }},
+                    backgroundColor: '#00ff8888',
+                    borderColor: '#00ff88',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                }]
+            },
+            options: { ...chartDefaults, plugins: { ...chartDefaults.plugins,
+                title: { display: true, text: 'PLAYS BY MONTH', color: '#ffff00',
+                         font: { family: 'Orbitron', size: 10 }, padding: { bottom: 10 } }
+            }}
+        });
+    </script>
+</body>
+</html>

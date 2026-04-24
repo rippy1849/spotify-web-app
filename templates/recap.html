@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DAILY RECAP // RAVE FM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            min-height: 100vh;
+            background: #000;
+            color: #fff;
+            padding: 40px 20px;
+        }
+
+        .scanlines {
+            pointer-events: none;
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent 0px,
+                transparent 3px,
+                rgba(0,0,0,0.12) 3px,
+                rgba(0,0,0,0.12) 4px
+            );
+            z-index: 10;
+        }
+
+        .bg {
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%),
+                #000;
+            animation: bgshift 6s ease-in-out infinite alternate;
+            z-index: 0;
+        }
+
+        @keyframes bgshift {
+            from { filter: hue-rotate(0deg); }
+            to   { filter: hue-rotate(180deg); }
+        }
+
+        .content {
+            position: relative;
+            z-index: 5;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowShift 4s linear infinite;
+            filter: drop-shadow(0 0 12px #ff00ff);
+            letter-spacing: 4px;
+            margin-bottom: 8px;
+        }
+
+        @keyframes rainbowShift {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
+        }
+
+        .subtitle {
+            color: #00ffff;
+            text-shadow: 0 0 8px #00ffff;
+            letter-spacing: 4px;
+            font-size: 0.75rem;
+            margin-bottom: 40px;
+        }
+
+        .nav {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            color: #ff00aa;
+            text-decoration: none;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            text-shadow: 0 0 8px #ff00aa;
+        }
+
+        .nav a:hover { color: #fff; }
+
+        h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            letter-spacing: 4px;
+            color: #ffff00;
+            text-shadow: 0 0 10px #ffff0088;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #ffff0033;
+            padding-bottom: 8px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff44;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 0 20px #ff00ff22;
+        }
+
+        .stat-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 900;
+            color: #00ffff;
+            text-shadow: 0 0 16px #00ffff;
+        }
+
+        .stat-label {
+            font-size: 0.62rem;
+            letter-spacing: 2px;
+            color: #ff00aa;
+            margin-top: 6px;
+        }
+
+        .highlight-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff44;
+            border-radius: 10px;
+            padding: 20px 24px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 0 20px #ff00ff11;
+        }
+
+        .highlight-card img {
+            width: 56px;
+            height: 56px;
+            border-radius: 6px;
+            flex-shrink: 0;
+            border: 1px solid #ff00ff44;
+        }
+
+        .highlight-card .label {
+            font-size: 0.65rem;
+            letter-spacing: 3px;
+            color: #ff00aa;
+            margin-bottom: 4px;
+        }
+
+        .highlight-card .value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.95rem;
+            color: #fff;
+        }
+
+        .highlight-card .sub {
+            font-size: 0.72rem;
+            color: #00ffff;
+            margin-top: 2px;
+        }
+
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+
+        .section { margin-bottom: 40px; }
+
+        .play-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid #ffffff08;
+            font-size: 0.78rem;
+        }
+
+        .play-item .time { color: #ff00aa; width: 48px; flex-shrink: 0; font-size: 0.68rem; }
+        .play-item .name { color: #fff; flex: 1; }
+        .play-item .artist { color: #00ffff; font-size: 0.7rem; }
+
+        .skipped-badge {
+            display: inline-block;
+            background: #ff00aa22;
+            color: #ff00aa;
+            border: 1px solid #ff00aa55;
+            border-radius: 4px;
+            padding: 1px 5px;
+            font-size: 0.58rem;
+            letter-spacing: 2px;
+        }
+
+        .played-badge {
+            display: inline-block;
+            background: #00ff8822;
+            color: #00ff88;
+            border: 1px solid #00ff8855;
+            border-radius: 4px;
+            padding: 1px 5px;
+            font-size: 0.58rem;
+            letter-spacing: 2px;
+        }
+
+        .mood-pill {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 99px;
+            font-size: 0.72rem;
+            letter-spacing: 2px;
+            margin: 4px;
+        }
+
+        .empty {
+            color: #555;
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            text-align: center;
+            padding: 40px 0;
+        }
+
+        @media (max-width: 700px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .two-col    { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/stats">◈ STATS</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+
+        <h1>DAILY RECAP</h1>
+        <p class="subtitle">◈ {{ today }} ◈</p>
+
+        {% if total_today == 0 %}
+            <p class="empty">// NO PLAYS RECORDED TODAY //</p>
+        {% else %}
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_today }}</div>
+                <div class="stat-label">TRACKS PLAYED</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ skips_today }}</div>
+                <div class="stat-label">SKIPPED</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ skip_rate_today }}%</div>
+                <div class="stat-label">SKIP RATE</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ minutes_today }}m</div>
+                <div class="stat-label">MINUTES LISTENED</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ unique_tracks_today }}</div>
+                <div class="stat-label">UNIQUE TRACKS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ unique_artists_today }}</div>
+                <div class="stat-label">UNIQUE ARTISTS</div>
+            </div>
+            {% if peak_hour %}
+            <div class="stat-card">
+                <div class="stat-value">{{ "%02d:00" | format(peak_hour[0]) }}</div>
+                <div class="stat-label">PEAK HOUR ({{ peak_hour[1] }} PLAYS)</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="two-col">
+            {% if top_track_today %}
+            <div class="highlight-card">
+                {% if top_track_today.art %}
+                <img src="{{ top_track_today.art }}" alt="art">
+                {% endif %}
+                <div>
+                    <div class="label">⚡ TOP TRACK TODAY</div>
+                    <div class="value">{{ top_track_today.name }}</div>
+                    <div class="sub">{{ top_track_today.artists }} · {{ top_track_today.count }} plays</div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if top_artist_today %}
+            <div class="highlight-card">
+                <div>
+                    <div class="label">🎤 TOP ARTIST TODAY</div>
+                    <div class="value">{{ top_artist_today[0] }}</div>
+                    <div class="sub">{{ top_artist_today[1] }} plays</div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if first_track %}
+            <div class="highlight-card">
+                {% if first_track.album_art_url %}
+                <img src="{{ first_track.album_art_url }}" alt="art">
+                {% endif %}
+                <div>
+                    <div class="label">🌅 FIRST TRACK</div>
+                    <div class="value">{{ first_track.track_name }}</div>
+                    <div class="sub">{{ first_track.artists }} · {{ first_track.listened_at.strftime("%H:%M") }}</div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if last_track %}
+            <div class="highlight-card">
+                {% if last_track.album_art_url %}
+                <img src="{{ last_track.album_art_url }}" alt="art">
+                {% endif %}
+                <div>
+                    <div class="label">🌙 LAST TRACK</div>
+                    <div class="value">{{ last_track.track_name }}</div>
+                    <div class="sub">{{ last_track.artists }} · {{ last_track.listened_at.strftime("%H:%M") }}</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+
+        <div class="section">
+            <h2>📋 FULL PLAY LOG</h2>
+            {% for play in today_plays %}
+            <div class="play-item">
+                <div class="time">{{ play.listened_at.strftime("%H:%M") }}</div>
+                <div class="name">{{ play.track_name }}</div>
+                <div class="artist">{{ play.artists }}</div>
+                {% if play.was_skipped %}
+                    <span class="skipped-badge">SKIP</span>
+                {% else %}
+                    <span class="played-badge">✓</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {% endif %}
+    </div>
+</body>
+</html>
