@@ -44,7 +44,7 @@
         .content {
             position: relative;
             z-index: 5;
-            max-width: 1100px;
+            max-width: 1200px;
             margin: 0 auto;
         }
 
@@ -137,6 +137,13 @@
 
         .two-col {
             display: grid;
+            grid-template-columns: 1fr 1.6fr;
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .two-col-equal {
+            display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 24px;
             margin-bottom: 40px;
@@ -147,9 +154,8 @@
             border: 1px solid #ff00ff22;
             border-radius: 10px;
             padding: 20px;
+            position: relative;
         }
-
-        .chart-card canvas { max-height: 280px; }
 
         .section { margin-bottom: 48px; }
 
@@ -221,9 +227,10 @@
             padding: 40px 0;
         }
 
-        @media (max-width: 700px) {
-            .two-col   { grid-template-columns: 1fr; }
-            .hour-grid { grid-template-columns: repeat(4, 1fr); }
+        @media (max-width: 900px) {
+            .two-col       { grid-template-columns: 1fr; }
+            .two-col-equal { grid-template-columns: 1fr; }
+            .hour-grid     { grid-template-columns: repeat(4, 1fr); }
         }
     </style>
 </head>
@@ -242,7 +249,6 @@
         <h1>VIBE</h1>
         <p class="subtitle">◈ AUTO MOOD TRACKING ◈</p>
 
-        <!-- Current vibe -->
         <div class="vibe-hero">
             <div class="label">◈ YOUR CURRENT VIBE ◈</div>
             <div class="current-mood">{{ current_vibe }}</div>
@@ -253,12 +259,15 @@
         {% else %}
 
         <!-- Mood distribution + genre chart -->
-        <div class="two-col">
-            <div class="chart-card">
-                <canvas id="moodChart"></canvas>
-            </div>
-            <div class="chart-card">
-                <canvas id="genreChart"></canvas>
+        <div class="section">
+            <h2>🎵 MOOD & GENRE BREAKDOWN</h2>
+            <div class="two-col">
+                <div class="chart-card" style="height: 520px;">
+                    <canvas id="moodChart"></canvas>
+                </div>
+                <div class="chart-card" style="height: 520px;">
+                    <canvas id="genreChart"></canvas>
+                </div>
             </div>
         </div>
 
@@ -277,8 +286,8 @@
 
         <!-- Mood by day of week + genre mood map -->
         <div class="section">
-            <h2>📅 DOMINANT MOOD BY DAY</h2>
-            <div class="two-col">
+            <h2>📅 DOMINANT MOOD BY DAY & GENRE</h2>
+            <div class="two-col-equal">
                 <div class="chart-card">
                     <table>
                         <thead><tr><th>DAY</th><th>VIBE</th></tr></thead>
@@ -367,10 +376,16 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
+                layout: { padding: 10 },
                 plugins: {
                     legend: {
                         position: 'bottom',
-                        labels: { color: '#fff', font: { family: 'Share Tech Mono', size: 9 }, padding: 12 }
+                        labels: {
+                            color: '#fff',
+                            font: { family: 'Share Tech Mono', size: 9 },
+                            padding: 12
+                        }
                     },
                     title: {
                         display: true,
@@ -400,6 +415,7 @@
             options: {
                 indexAxis: 'y',
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false },
                     title: {
@@ -412,8 +428,21 @@
                     tooltip: tooltipDefaults,
                 },
                 scales: {
-                    x: { ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } },
-                    y: { ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } }
+                    x: {
+                        ticks: {
+                            color: '#00ffff',
+                            font: { family: 'Share Tech Mono', size: 9 }
+                        },
+                        grid: { color: '#ffffff0a' }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#ff00aa',
+                            font: { family: 'Share Tech Mono', size: 10 },
+                            autoSkip: false,
+                        },
+                        grid: { color: '#ffffff0a' }
+                    }
                 }
             }
         });
