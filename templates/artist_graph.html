@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ARTIST GRAPH // RAVE FM</title>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            height: 100vh;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .bg {
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%),
+                #000;
+            animation: bgshift 6s ease-in-out infinite alternate;
+            z-index: 0;
+        }
+
+        @keyframes bgshift {
+            from { filter: hue-rotate(0deg); }
+            to   { filter: hue-rotate(180deg); }
+        }
+
+        svg {
+            position: fixed;
+            inset: 0;
+            z-index: 2;
+            width: 100%;
+            height: 100%;
+        }
+
+        .nav {
+            position: fixed;
+            top: 20px;
+            left: 24px;
+            z-index: 20;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .nav.visible { opacity: 1; }
+
+        .nav a {
+            color: #ff00aa88;
+            text-decoration: none;
+            font-size: 0.72rem;
+            letter-spacing: 2px;
+            transition: color 0.2s;
+        }
+
+        .nav a:hover { color: #fff; }
+
+        .title-box {
+            position: fixed;
+            top: 20px;
+            right: 24px;
+            z-index: 20;
+            text-align: right;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .title-box.visible { opacity: 1; }
+
+        .title-box h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowShift 4s linear infinite;
+            letter-spacing: 4px;
+        }
+
+        @keyframes rainbowShift {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
+        }
+
+        .title-box .sub {
+            font-size: 0.65rem;
+            color: #00ffff88;
+            letter-spacing: 3px;
+            margin-top: 4px;
+        }
+
+        .tooltip {
+            position: fixed;
+            background: rgba(0,0,0,0.92);
+            border: 1px solid #ff00ff;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 0.72rem;
+            color: #fff;
+            pointer-events: none;
+            display: none;
+            z-index: 100;
+            box-shadow: 0 0 20px #ff00ff44;
+            max-width: 260px;
+        }
+
+        .tooltip .tt-artists {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+            color: #ff00ff;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+
+        .tooltip .tt-count {
+            color: #00ffff;
+            margin-bottom: 6px;
+            font-size: 0.68rem;
+        }
+
+        .tooltip .tt-track {
+            color: #ffff00;
+            font-size: 0.65rem;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tooltip .tt-more {
+            color: #555;
+            font-size: 0.62rem;
+            margin-top: 4px;
+        }
+
+        .node-tooltip {
+            position: fixed;
+            background: rgba(0,0,0,0.92);
+            border: 1px solid #00ffff;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 0.72rem;
+            color: #fff;
+            pointer-events: none;
+            display: none;
+            z-index: 100;
+            box-shadow: 0 0 20px #00ffff44;
+        }
+
+        .node-tooltip .nt-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+            color: #00ffff;
+            margin-bottom: 4px;
+        }
+
+        .node-tooltip .nt-plays { color: #ff00aa; font-size: 0.65rem; }
+
+        .search-box {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            width: 280px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .search-box.visible { opacity: 1; }
+
+        .search-box input {
+            width: 100%;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #ff00ff44;
+            border-radius: 4px;
+            padding: 10px 16px;
+            color: #fff;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .search-box input:focus {
+            border-color: #ff00ff;
+            box-shadow: 0 0 16px #ff00ff44;
+        }
+
+        .search-box input::placeholder { color: #555; }
+
+        .search-results {
+            background: rgba(0,0,0,0.92);
+            border: 1px solid #ff00ff33;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            display: none;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .search-result-item {
+            padding: 8px 16px;
+            font-size: 0.72rem;
+            letter-spacing: 1px;
+            color: #ccc;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid #ffffff0a;
+        }
+
+        .search-result-item:hover { background: #ff00ff22; color: #ff00ff; }
+
+        .controls {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            display: flex;
+            gap: 12px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .controls.visible { opacity: 1; }
+
+        .ctrl-btn {
+            background: rgba(0,0,0,0.7);
+            border: 1px solid #ff00ff33;
+            border-radius: 4px;
+            padding: 8px 16px;
+            color: #ff00aa88;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.65rem;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .ctrl-btn:hover {
+            border-color: #ff00ff;
+            color: #ff00ff;
+            background: rgba(255,0,255,0.1);
+        }
+
+        .stats-bar {
+            position: fixed;
+            bottom: 64px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            display: flex;
+            gap: 24px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.65rem;
+            letter-spacing: 2px;
+            white-space: nowrap;
+        }
+
+        .stats-bar.visible { opacity: 1; }
+        .stats-bar span { color: #555; }
+        .stats-bar strong { color: #00ffff; }
+
+        .empty {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 5;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            color: #ff00ff;
+            text-shadow: 0 0 20px #ff00ff;
+            letter-spacing: 4px;
+        }
+
+        .empty p {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.75rem;
+            color: #555;
+            letter-spacing: 2px;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+
+    <div class="nav" id="nav">
+        <a href="/">⌂ HOME</a>
+        <a href="/now-playing">▶ NOW PLAYING</a>
+        <a href="/stats">◈ STATS</a>
+        <a href="/logout">⏏ LOGOUT</a>
+    </div>
+
+    <div class="title-box" id="titleBox">
+        <h1>ARTIST GRAPH</h1>
+        <div class="sub">◈ {{ node_count }} ARTISTS · {{ link_count }} CONNECTIONS ◈</div>
+    </div>
+
+    {% if node_count == 0 %}
+    <div class="empty">
+        // NO DATA YET //
+        <p>Listen to more music to build the graph</p>
+    </div>
+    {% else %}
+
+    <svg id="graph"></svg>
+
+    <div class="tooltip" id="tooltip">
+        <div class="tt-artists" id="tt-artists"></div>
+        <div class="tt-count"   id="tt-count"></div>
+        <div id="tt-tracks"></div>
+        <div class="tt-more"    id="tt-more"></div>
+    </div>
+
+    <div class="node-tooltip" id="nodeTooltip">
+        <div class="nt-name"  id="nt-name"></div>
+        <div class="nt-plays" id="nt-plays"></div>
+    </div>
+
+    <div class="search-box" id="searchBox">
+        <input type="text" id="artistSearch" placeholder="SEARCH ARTIST..." autocomplete="off">
+        <div class="search-results" id="searchResults"></div>
+    </div>
+
+    <div class="stats-bar" id="statsBar">
+        <span>DRAG <strong>nodes</strong> to pin · DOUBLE-CLICK to unpin</span>
+        <span>SCROLL to <strong>zoom</strong></span>
+        <span>HOVER <strong>lines</strong> for shared tracks</span>
+    </div>
+
+    <div class="controls" id="controls">
+        <button class="ctrl-btn" id="btnReset">↺ RESET VIEW</button>
+        <button class="ctrl-btn" id="btnFreeze">❄ FREEZE</button>
+        <button class="ctrl-btn" id="btnCharge">⚡ SPREAD</button>
+    </div>
+
+    <script>
+        const graphData = {{ graph_data | safe }};
+        const neon      = ['#ff00ff','#00ffff','#ffff00','#00ff88','#ff00aa','#ff6600','#aa00ff','#00aaff'];
+        const tooltip   = document.getElementById('tooltip');
+        const nodeTip   = document.getElementById('nodeTooltip');
+
+        // ── Mouse idle ────────────────────────────────────────────────────────
+        let mouseTimer = null;
+        const uiEls    = ['nav','titleBox','statsBar','controls','searchBox'].map(id => document.getElementById(id));
+
+        document.addEventListener('mousemove', () => {
+            uiEls.forEach(el => el.classList.add('visible'));
+            clearTimeout(mouseTimer);
+            mouseTimer = setTimeout(() => {
+                uiEls.forEach(el => el.classList.remove('visible'));
+            }, 3000);
+        });
+
+        // ── SVG setup ─────────────────────────────────────────────────────────
+        const svg = d3.select('#graph');
+        const W   = window.innerWidth;
+        const H   = window.innerHeight;
+        const g   = svg.append('g');
+
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on('zoom', (event) => g.attr('transform', event.transform));
+
+        svg.call(zoom);
+
+        // ── Defs ──────────────────────────────────────────────────────────────
+        const defs = svg.append('defs');
+
+        const filter = defs.append('filter').attr('id', 'glow');
+        filter.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'coloredBlur');
+        const feMerge = filter.append('feMerge');
+        feMerge.append('feMergeNode').attr('in', 'coloredBlur');
+        feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+        graphData.nodes.forEach((node, i) => {
+            const r = nodeRadius(node);
+
+            defs.append('clipPath')
+                .attr('id', `clip-${i}`)
+                .append('circle')
+                .attr('r', r);
+
+            if (node.image) {
+                defs.append('pattern')
+                    .attr('id',           `img-${i}`)
+                    .attr('patternUnits', 'objectBoundingBox')
+                    .attr('width',        1)
+                    .attr('height',       1)
+                    .append('image')
+                    .attr('href',   node.image)
+                    .attr('width',  r * 2)
+                    .attr('height', r * 2)
+                    .attr('x',      0)
+                    .attr('y',      0)
+                    .attr('preserveAspectRatio', 'xMidYMid slice');
+            }
+        });
+
+        function nodeRadius(node) {
+            const base = 22;
+            const max  = 52;
+            const maxP = Math.max(...graphData.nodes.map(n => n.plays));
+            return base + (node.plays / maxP) * (max - base);
+        }
+
+        function linkWidth(link) {
+            return Math.max(1.5, Math.min(link.count * 2.5, 14));
+        }
+
+        // ── Simulation ────────────────────────────────────────────────────────
+        const simulation = d3.forceSimulation(graphData.nodes)
+            .force('link',      d3.forceLink(graphData.links).id(d => d.id).distance(150).strength(0.5))
+            .force('charge',    d3.forceManyBody().strength(-300).distanceMax(400))
+            .force('center',    d3.forceCenter(W / 2, H / 2).strength(0.05))
+            .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 15))
+            .alphaDecay(0.02)
+            .velocityDecay(0.4);
+
+        // ── Links ─────────────────────────────────────────────────────────────
+        const link = g.append('g')
+            .selectAll('line')
+            .data(graphData.links)
+            .join('line')
+            .attr('stroke',         (d, i) => neon[i % neon.length])
+            .attr('stroke-width',   d => linkWidth(d))
+            .attr('stroke-opacity', 0.5)
+            .style('cursor', 'pointer')
+            .on('mousemove', (event, d) => {
+                document.getElementById('tt-artists').textContent = `${d.source.id} × ${d.target.id}`;
+                document.getElementById('tt-count').textContent   = `${d.count} shared track${d.count > 1 ? 's' : ''}`;
+
+                const trackEl = document.getElementById('tt-tracks');
+                trackEl.innerHTML = '';
+                d.tracks.slice(0, 5).forEach(t => {
+                    const div       = document.createElement('div');
+                    div.className   = 'tt-track';
+                    div.textContent = `♦ ${t}`;
+                    trackEl.appendChild(div);
+                });
+
+                document.getElementById('tt-more').textContent = d.tracks.length > 5 ? `+${d.tracks.length - 5} more` : '';
+
+                tooltip.style.display = 'block';
+                tooltip.style.left    = (event.clientX + 14) + 'px';
+                tooltip.style.top     = (event.clientY - 10) + 'px';
+            })
+            .on('mouseleave', () => { tooltip.style.display = 'none'; })
+            .on('mouseover', function(event, d) {
+                d3.select(this)
+                    .attr('stroke-opacity', 1)
+                    .attr('stroke-width', linkWidth(d) + 2);
+            })
+            .on('mouseout', function(event, d) {
+                d3.select(this)
+                    .attr('stroke-opacity', 0.5)
+                    .attr('stroke-width', linkWidth(d));
+            });
+
+        // ── Nodes ─────────────────────────────────────────────────────────────
+        const node = g.append('g')
+            .selectAll('g')
+            .data(graphData.nodes)
+            .join('g')
+            .style('cursor', 'grab')
+            .call(d3.drag()
+                .on('start', dragStart)
+                .on('drag',  dragging)
+                .on('end',   dragEnd)
+            );
+
+        // Glow ring — dimmer for solo artists
+        node.append('circle')
+            .attr('r',                d => nodeRadius(d) + 5)
+            .attr('fill',             'none')
+            .attr('stroke',           (d, i) => neon[i % neon.length])
+            .attr('stroke-width',     d => d.connected ? 1.5 : 0.8)
+            .attr('opacity',          d => d.connected ? 0.5 : 0.2)
+            .attr('filter',           'url(#glow)')
+            .attr('stroke-dasharray', d => d.connected ? 'none' : '4,3');
+
+        // Image or fallback
+        node.each(function(d, i) {
+            const n = d3.select(this);
+            const r = nodeRadius(d);
+
+            if (d.image) {
+                n.append('circle')
+                    .attr('r',            r)
+                    .attr('fill',         `url(#img-${i})`)
+                    .attr('stroke',       neon[i % neon.length])
+                    .attr('stroke-width', 2);
+            } else {
+                n.append('circle')
+                    .attr('r',            r)
+                    .attr('fill',         neon[i % neon.length] + '33')
+                    .attr('stroke',       neon[i % neon.length])
+                    .attr('stroke-width', 2);
+
+                n.append('text')
+                    .attr('text-anchor',       'middle')
+                    .attr('dominant-baseline', 'middle')
+                    .attr('fill',              '#fff')
+                    .attr('font-size',         Math.max(10, r * 0.4))
+                    .attr('font-family',       'Share Tech Mono')
+                    .text(d.id.slice(0, 2).toUpperCase());
+            }
+        });
+
+        // Name label
+        node.append('text')
+            .attr('text-anchor',       'middle')
+            .attr('dominant-baseline', 'middle')
+            .attr('y',                 d => nodeRadius(d) + 14)
+            .attr('fill',              (d, i) => neon[i % neon.length])
+            .attr('font-size',         10)
+            .attr('font-family',       'Share Tech Mono')
+            .attr('letter-spacing',    1)
+            .text(d => d.id);
+
+        // Node hover
+        node.on('mousemove', (event, d) => {
+            document.getElementById('nt-name').textContent  = d.id;
+            document.getElementById('nt-plays').textContent = `${d.plays} plays in history`;
+            nodeTip.style.display = 'block';
+            nodeTip.style.left    = (event.clientX + 14) + 'px';
+            nodeTip.style.top     = (event.clientY - 10) + 'px';
+        })
+        .on('mouseleave', () => { nodeTip.style.display = 'none'; });
+
+        // Double click to unpin
+        node.on('dblclick', (event, d) => {
+            event.stopPropagation();
+            d.fx = null;
+            d.fy = null;
+            simulation.alpha(0.1).restart();
+        });
+
+        // ── Tick ──────────────────────────────────────────────────────────────
+        simulation.on('tick', () => {
+            link
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+
+            node.attr('transform', d => `translate(${d.x},${d.y})`);
+        });
+
+        // ── Drag ──────────────────────────────────────────────────────────────
+        function dragStart(event, d) {
+            event.sourceEvent.stopPropagation();
+            if (!event.active) simulation.alphaTarget(0.05).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+            d3.select(this).style('cursor', 'grabbing');
+        }
+
+        function dragging(event, d) {
+            const transform = d3.zoomTransform(svg.node());
+            d.fx = transform.invertX(event.sourceEvent.clientX);
+            d.fy = transform.invertY(event.sourceEvent.clientY);
+        }
+
+        function dragEnd(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = d.x;
+            d.fy = d.y;
+            d3.select(this).style('cursor', 'grab');
+        }
+
+        // ── Controls ──────────────────────────────────────────────────────────
+        let frozen = false;
+        document.getElementById('btnFreeze').addEventListener('click', () => {
+            frozen = !frozen;
+            if (frozen) {
+                simulation.stop();
+                document.getElementById('btnFreeze').textContent = '▶ UNFREEZE';
+            } else {
+                simulation.alpha(0.1).alphaTarget(0).restart();
+                document.getElementById('btnFreeze').textContent = '❄ FREEZE';
+            }
+        });
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
+            clearHighlight();
+            searchInput.value           = '';
+            searchResults.style.display = 'none';
+        });
+
+        let spread = false;
+        document.getElementById('btnCharge').addEventListener('click', () => {
+            spread = !spread;
+
+            if (spread) {
+                simulation.force('link').distance(280).strength(0.3);
+                simulation.force('charge').strength(-600).distanceMax(600);
+                simulation.force('collision').radius(d => nodeRadius(d) + 40);
+                document.getElementById('btnCharge').textContent = '🔗 TIGHTEN';
+            } else {
+                simulation.force('link').distance(150).strength(0.5);
+                simulation.force('charge').strength(-300).distanceMax(400);
+                simulation.force('collision').radius(d => nodeRadius(d) + 15);
+                document.getElementById('btnCharge').textContent = '⚡ SPREAD';
+            }
+
+            simulation.alpha(0.3).alphaTarget(0).restart();
+        });
+
+        // ── Search ────────────────────────────────────────────────────────────
+        const searchInput   = document.getElementById('artistSearch');
+        const searchResults = document.getElementById('searchResults');
+        const artistNames   = graphData.nodes.map(n => n.id);
+        let   highlightedNode = null;
+
+        searchInput.addEventListener('input', () => {
+            const q = searchInput.value.trim().toLowerCase();
+            searchResults.innerHTML = '';
+
+            if (!q) {
+                searchResults.style.display = 'none';
+                clearHighlight();
+                return;
+            }
+
+            const matches = artistNames
+                .filter(name => name.toLowerCase().includes(q))
+                .slice(0, 8);
+
+            if (matches.length === 0) {
+                searchResults.style.display = 'none';
+                return;
+            }
+
+            searchResults.style.display = 'block';
+            matches.forEach(name => {
+                const item       = document.createElement('div');
+                item.className   = 'search-result-item';
+                item.textContent = name;
+                item.addEventListener('click', () => {
+                    searchInput.value           = name;
+                    searchResults.style.display = 'none';
+                    focusArtist(name);
+                });
+                searchResults.appendChild(item);
+            });
+        });
+
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                searchInput.value           = '';
+                searchResults.style.display = 'none';
+                clearHighlight();
+            }
+            if (e.key === 'Enter') {
+                const q     = searchInput.value.trim().toLowerCase();
+                const match = artistNames.find(n => n.toLowerCase() === q)
+                           || artistNames.find(n => n.toLowerCase().includes(q));
+                if (match) {
+                    searchResults.style.display = 'none';
+                    focusArtist(match);
+                }
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#searchBox')) {
+                searchResults.style.display = 'none';
+            }
+        });
+
+        function focusArtist(name) {
+            const target = graphData.nodes.find(n => n.id === name);
+            if (!target) return;
+
+            clearHighlight();
+            highlightedNode = name;
+
+            node.each(function(d) {
+                const el = d3.select(this);
+                if (d.id === name) {
+                    el.selectAll('circle')
+                        .attr('stroke-width', 4)
+                        .attr('opacity',      1);
+                    el.selectAll('text')
+                        .attr('fill',      '#ffff00')
+                        .attr('font-size', 13);
+                } else {
+                    el.attr('opacity', 0.25);
+                }
+            });
+
+            link.attr('opacity', d =>
+                (d.source.id === name || d.target.id === name) ? 1 : 0.05
+            );
+
+            if (target.x && target.y) {
+                const scale = 1.8;
+                const tx    = W / 2 - target.x * scale;
+                const ty    = H / 2 - target.y * scale;
+                svg.transition().duration(600).call(
+                    zoom.transform,
+                    d3.zoomIdentity.translate(tx, ty).scale(scale)
+                );
+            }
+        }
+
+        function clearHighlight() {
+            highlightedNode = null;
+            node.attr('opacity', 1);
+            node.selectAll('text')
+                .attr('fill',      (d, i) => neon[i % neon.length])
+                .attr('font-size', 10);
+            link.attr('opacity', 1);
+        }
+
+        svg.on('click', (event) => {
+            if (event.target === svg.node()) {
+                clearHighlight();
+                searchInput.value           = '';
+                searchResults.style.display = 'none';
+            }
+        });
+
+        // ── Resize ────────────────────────────────────────────────────────────
+        window.addEventListener('resize', () => {
+            simulation.force('center', d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2).strength(0.05));
+            simulation.alpha(0.1).restart();
+        });
+    </script>
+
+    {% endif %}
+</body>
+</html>

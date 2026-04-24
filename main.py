@@ -13,7 +13,7 @@ from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select, case
-from collections import defaultdict
+from collections import defaultdict, Counter, namedtuple
 
 from database import init_db, AsyncSessionLocal
 from models import TrackPlay, ArtistCache
@@ -27,9 +27,7 @@ load_dotenv()
 
 SPOTIFY_CLIENT_ID     = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-# REDIRECT_URI          = "http://127.0.0.1:8000/auth-redirect"
-REDIRECT_URI          = "http://100.113.65.45:8000/auth-redirect"
-
+REDIRECT_URI          = "http://127.0.0.1:8000/auth-redirect"
 
 SPOTIFY_AUTH_URL        = "https://accounts.spotify.com/authorize"
 SPOTIFY_TOKEN_URL       = "https://accounts.spotify.com/api/token"
@@ -37,8 +35,8 @@ SPOTIFY_NOW_PLAYING_URL = "https://api.spotify.com/v1/me/player/currently-playin
 
 SCOPES = "user-read-currently-playing user-read-playback-state user-read-recently-played user-top-read"
 
-token_store     = {}
-poller_running  = False
+token_store    = {}
+poller_running = False
 
 
 async def get_db():
@@ -65,7 +63,6 @@ async def refresh_access_token():
 
 
 async def poll_spotify(app):
-    """Background task that polls Spotify every 5 seconds and logs track changes."""
     print(f"[POLLER] Instance started — PID: {os.getpid()}")
     await asyncio.sleep(5)
     while True:
@@ -105,7 +102,6 @@ async def poll_spotify(app):
                         if is_new_track(track):
                             print(f"[POLLER] NEW TRACK — committing: {current_track_state.get('track_name')}")
 
-                            # Commit previous track first
                             try:
                                 async with AsyncSessionLocal() as db:
                                     await commit_previous_track(db)
@@ -117,31 +113,9 @@ async def poll_spotify(app):
                             except Exception as e:
                                 print(f"[POLLER] Commit error: {e}")
 
-                            # Update state to new track
                             update_state(track)
                             print(f"[POLLER] State updated to: {track['track_name']}")
 
-                            # Fetch audio features for new track
-                            try:
-                                async with httpx.AsyncClient() as client:
-                                    af_resp = await client.get(
-                                        f"https://api.spotify.com/v1/audio-features/{item['id']}",
-                                        headers={"Authorization": f"Bearer {token_store['access_token']}"},
-                                    )
-                                print(f"[POLLER] Audio features status: {af_resp.status_code}")
-                                if af_resp.status_code == 200:
-                                    af = af_resp.json()
-                                    current_track_state["valence"]          = af.get("valence")
-                                    current_track_state["energy"]           = af.get("energy")
-                                    current_track_state["danceability"]     = af.get("danceability")
-                                    current_track_state["tempo"]            = af.get("tempo")
-                                    current_track_state["acousticness"]     = af.get("acousticness")
-                                    current_track_state["instrumentalness"] = af.get("instrumentalness")
-                                    print(f"[POLLER] Features stored: valence={af.get('valence')} energy={af.get('energy')}")
-                            except Exception as e:
-                                print(f"[POLLER] Audio features error: {e}")
-
-                            # Fetch and store genre for new track
                             if artist_id:
                                 try:
                                     async with AsyncSessionLocal() as db:
@@ -166,7 +140,6 @@ async def poll_spotify(app):
         await asyncio.sleep(5)
 
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global poller_running
@@ -182,6 +155,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
+
+ArtistRow     = namedtuple("ArtistRow",     ["artists", "plays"])
+ArtistSkipRow = namedtuple("ArtistSkipRow", ["artists", "skips"])
+ArtistRateRow = namedtuple("ArtistRateRow", ["artists", "plays", "skips", "skip_rate"])
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -285,6 +262,27 @@ async def now_playing(request: Request):
         "request": request,
         "track":   track,
     })
+
+
+@app.get("/now-playing-json")
+async def now_playing_json():
+    if "access_token" not in token_store:
+        return {}
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            SPOTIFY_NOW_PLAYING_URL,
+            headers={"Authorization": f"Bearer {token_store['access_token']}"},
+        )
+    if response.status_code == 200:
+        data = response.json()
+        item = data.get("item")
+        if item:
+            return {
+                "name":      item["name"],
+                "artists":   ", ".join(a["name"] for a in item["artists"]),
+                "album_art": item["album"]["images"][0]["url"] if item["album"]["images"] else None,
+            }
+    return {}
 
 
 @app.get("/queue", response_class=HTMLResponse)
@@ -407,6 +405,7 @@ async def stats(request: Request, db: AsyncSession = Depends(get_db)):
     if "access_token" not in token_store:
         return RedirectResponse("/")
 
+    # ── Totals ────────────────────────────────────────────────────────────────
     total_plays    = await db.scalar(select(func.count()).select_from(TrackPlay)) or 0
     total_skips    = await db.scalar(select(func.count()).select_from(TrackPlay).where(TrackPlay.was_skipped == True)) or 0
     total_complete = total_plays - total_skips
@@ -415,14 +414,27 @@ async def stats(request: Request, db: AsyncSession = Depends(get_db)):
     total_minutes  = round(total_ms / 60000, 1)
     total_hours    = round(total_minutes / 60, 1)
     unique_tracks  = await db.scalar(select(func.count(func.distinct(TrackPlay.track_id))).select_from(TrackPlay)) or 0
-    unique_artists = await db.scalar(select(func.count(func.distinct(TrackPlay.artists))).select_from(TrackPlay)) or 0
 
+    # Unique artists — split featured artists
+    all_unique_q    = select(TrackPlay.artists)
+    all_unique_rows = (await db.execute(all_unique_q)).fetchall()
+    unique_artist_set = set()
+    for row in all_unique_rows:
+        if row.artists:
+            for a in row.artists.split(","):
+                a = a.strip()
+                if a:
+                    unique_artist_set.add(a.lower())
+    unique_artists = len(unique_artist_set)
+
+    # ── Average progress before skip ──────────────────────────────────────────
     avg_skip_pct_row = await db.scalar(
         select(func.avg(TrackPlay.progress_pct))
         .where(TrackPlay.was_skipped == True)
     )
     avg_skip_pct = round(avg_skip_pct_row or 0, 1)
 
+    # ── Most active day ───────────────────────────────────────────────────────
     busiest_day_q = (
         select(
             func.strftime('%Y-%m-%d', TrackPlay.listened_at).label("day"),
@@ -436,6 +448,7 @@ async def stats(request: Request, db: AsyncSession = Depends(get_db)):
     busiest_day     = busiest_day_row.day if busiest_day_row else "N/A"
     busiest_day_cnt = busiest_day_row.cnt if busiest_day_row else 0
 
+    # ── Longest no-skip streak ────────────────────────────────────────────────
     all_plays_q    = select(TrackPlay.was_skipped).order_by(TrackPlay.listened_at.asc())
     all_skips_col  = (await db.execute(all_plays_q)).fetchall()
     longest_streak = current_streak = 0
@@ -446,6 +459,7 @@ async def stats(request: Request, db: AsyncSession = Depends(get_db)):
         else:
             current_streak = 0
 
+    # ── Top tracks ────────────────────────────────────────────────────────────
     most_played_q = (
         select(TrackPlay.track_name, TrackPlay.artists, func.count().label("plays"))
         .group_by(TrackPlay.track_id)
@@ -480,37 +494,50 @@ async def stats(request: Request, db: AsyncSession = Depends(get_db)):
     )
     always_completed = (await db.execute(always_completed_q)).fetchall()
 
-    most_played_artists_q = (
-        select(TrackPlay.artists, func.count().label("plays"))
-        .group_by(TrackPlay.artists)
-        .order_by(func.count().desc())
-        .limit(10)
-    )
-    most_played_artists = (await db.execute(most_played_artists_q)).fetchall()
+    # ── Artists — split featured artists ─────────────────────────────────────
+    all_plays_artists_q = select(TrackPlay.artists)
+    all_artist_rows     = (await db.execute(all_plays_artists_q)).fetchall()
+    artist_counter      = Counter()
+    for row in all_artist_rows:
+        if row.artists:
+            for a in row.artists.split(","):
+                a = a.strip()
+                if a:
+                    artist_counter[a] += 1
+    most_played_artists = [ArtistRow(a, c) for a, c in artist_counter.most_common(10)]
 
-    most_skipped_artists_q = (
-        select(TrackPlay.artists, func.count().label("skips"))
-        .where(TrackPlay.was_skipped == True)
-        .group_by(TrackPlay.artists)
-        .order_by(func.count().desc())
-        .limit(10)
-    )
-    most_skipped_artists = (await db.execute(most_skipped_artists_q)).fetchall()
+    skipped_artists_q = select(TrackPlay.artists).where(TrackPlay.was_skipped == True)
+    skipped_rows      = (await db.execute(skipped_artists_q)).fetchall()
+    skip_counter      = Counter()
+    for row in skipped_rows:
+        if row.artists:
+            for a in row.artists.split(","):
+                a = a.strip()
+                if a:
+                    skip_counter[a] += 1
+    most_skipped_artists = [ArtistSkipRow(a, c) for a, c in skip_counter.most_common(10)]
 
-    artist_skip_rate_q = (
-        select(
-            TrackPlay.artists,
-            func.count().label("plays"),
-            func.sum(case((TrackPlay.was_skipped == True, 1), else_=0)).label("skips"),
-            (func.sum(case((TrackPlay.was_skipped == True, 1), else_=0)) * 100.0 / func.count()).label("skip_rate")
-        )
-        .group_by(TrackPlay.artists)
-        .having(func.count() >= 5)
-        .order_by((func.sum(case((TrackPlay.was_skipped == True, 1), else_=0)) * 100.0 / func.count()).asc())
-        .limit(10)
-    )
-    best_artists = (await db.execute(artist_skip_rate_q)).fetchall()
+    all_plays_for_rate_q = select(TrackPlay.artists, TrackPlay.was_skipped)
+    all_rate_rows        = (await db.execute(all_plays_for_rate_q)).fetchall()
+    artist_plays         = Counter()
+    artist_skips         = Counter()
+    for row in all_rate_rows:
+        if row.artists:
+            for a in row.artists.split(","):
+                a = a.strip()
+                if a:
+                    artist_plays[a] += 1
+                    if row.was_skipped:
+                        artist_skips[a] += 1
+    best_artists = []
+    for artist, plays in artist_plays.items():
+        if plays >= 5:
+            skips     = artist_skips.get(artist, 0)
+            skip_rate_val = round(skips / plays * 100, 1)
+            best_artists.append(ArtistRateRow(artist, plays, skips, skip_rate_val))
+    best_artists = sorted(best_artists, key=lambda x: x.skip_rate)[:10]
 
+    # ── Top albums ────────────────────────────────────────────────────────────
     most_played_albums_q = (
         select(TrackPlay.album, TrackPlay.artists, func.count().label("plays"))
         .group_by(TrackPlay.album)
@@ -528,6 +555,7 @@ async def stats(request: Request, db: AsyncSession = Depends(get_db)):
     )
     most_skipped_albums = (await db.execute(most_skipped_albums_q)).fetchall()
 
+    # ── Time of day ───────────────────────────────────────────────────────────
     hour_q = (
         select(TrackPlay.hour_of_day, func.count().label("cnt"))
         .group_by(TrackPlay.hour_of_day)
@@ -549,18 +577,21 @@ async def stats(request: Request, db: AsyncSession = Depends(get_db)):
     hour_skip_map    = {r.hour_of_day: round(r.skips / r.total * 100, 1) for r in hour_skip_rows if r.total > 0 and r.hour_of_day is not None}
     hour_skip_values = [hour_skip_map.get(h, 0) for h in range(24)]
 
+    # ── Day of week ───────────────────────────────────────────────────────────
     dow_order  = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
     dow_q      = select(TrackPlay.day_of_week, func.count().label("cnt")).group_by(TrackPlay.day_of_week)
     dow_rows   = (await db.execute(dow_q)).fetchall()
     dow_map    = {r.day_of_week: r.cnt for r in dow_rows}
     dow_values = [dow_map.get(d, 0) for d in dow_order]
 
+    # ── Month ─────────────────────────────────────────────────────────────────
     month_order  = ["January","February","March","April","May","June","July","August","September","October","November","December"]
     month_q      = select(TrackPlay.month, func.count().label("cnt")).group_by(TrackPlay.month)
     month_rows   = (await db.execute(month_q)).fetchall()
     month_map    = {r.month: r.cnt for r in month_rows}
     month_values = [month_map.get(m, 0) for m in month_order]
 
+    # ── This week ─────────────────────────────────────────────────────────────
     week_ago = datetime.now(TIMEZONE) - timedelta(days=7)
 
     top_track_week_q = (
@@ -572,15 +603,18 @@ async def stats(request: Request, db: AsyncSession = Depends(get_db)):
     )
     top_tracks_week = (await db.execute(top_track_week_q)).fetchall()
 
-    top_artist_week_q = (
-        select(TrackPlay.artists, func.count().label("plays"))
-        .where(TrackPlay.listened_at >= week_ago)
-        .group_by(TrackPlay.artists)
-        .order_by(func.count().desc())
-        .limit(5)
-    )
-    top_artists_week = (await db.execute(top_artist_week_q)).fetchall()
+    top_artist_week_q = select(TrackPlay.artists).where(TrackPlay.listened_at >= week_ago)
+    week_artist_rows  = (await db.execute(top_artist_week_q)).fetchall()
+    week_artist_counter = Counter()
+    for row in week_artist_rows:
+        if row.artists:
+            for a in row.artists.split(","):
+                a = a.strip()
+                if a:
+                    week_artist_counter[a] += 1
+    top_artists_week = [ArtistRow(a, c) for a, c in week_artist_counter.most_common(5)]
 
+    # ── Recent history ────────────────────────────────────────────────────────
     recent_q = (
         select(TrackPlay)
         .order_by(TrackPlay.listened_at.desc())
@@ -651,15 +685,24 @@ async def recap(request: Request, db: AsyncSession = Depends(get_db)):
         track_counts[p.track_id]["count"] += 1
     top_track_today = max(track_counts.values(), key=lambda x: x["count"]) if track_counts else None
 
-    artist_counts = {}
+    artist_counter_today = Counter()
     for p in today_plays:
-        artist_counts[p.artists] = artist_counts.get(p.artists, 0) + 1
-    top_artist_today = max(artist_counts.items(), key=lambda x: x[1]) if artist_counts else None
+        if p.artists:
+            for a in p.artists.split(","):
+                a = a.strip()
+                if a:
+                    artist_counter_today[a] += 1
+    top_artist_today = artist_counter_today.most_common(1)[0] if artist_counter_today else None
 
     first_track          = today_plays[0] if today_plays else None
     last_track           = today_plays[-1] if today_plays else None
     unique_tracks_today  = len(set(p.track_id for p in today_plays))
-    unique_artists_today = len(set(p.artists for p in today_plays))
+    unique_artists_today = len(set(
+        a.strip()
+        for p in today_plays if p.artists
+        for a in p.artists.split(",")
+        if a.strip()
+    ))
 
     hour_breakdown = {}
     for p in today_plays:
@@ -818,15 +861,17 @@ async def streaks(request: Request, db: AsyncSession = Depends(get_db)):
         else:
             break
 
+    # Artist loyalty streak — use primary artist
     best_artist_streak = {"artist": None, "count": 0}
     temp_artist        = {"artist": None, "count": 0}
     for play in all_plays:
-        if play.artists == temp_artist["artist"]:
+        primary = play.artists.split(",")[0].strip() if play.artists else None
+        if primary == temp_artist["artist"]:
             temp_artist["count"] += 1
         else:
             if temp_artist["count"] > best_artist_streak["count"]:
                 best_artist_streak = dict(temp_artist)
-            temp_artist = {"artist": play.artists, "count": 1}
+            temp_artist = {"artist": primary, "count": 1}
     if temp_artist["count"] > best_artist_streak["count"]:
         best_artist_streak = dict(temp_artist)
 
@@ -886,10 +931,6 @@ async def rave_mode(request: Request):
         return RedirectResponse("/")
 
     track        = None
-    bpm          = 120
-    energy       = 0.5
-    valence      = 0.5
-    danceability = 0.5
 
     if np_response.status_code == 200:
         data = np_response.json()
@@ -939,18 +980,21 @@ async def taste_evolution(request: Request, db: AsyncSession = Depends(get_db)):
     months_with_data = (await db.execute(months_q)).fetchall()
     month_names      = [r.month for r in months_with_data]
 
+    # Evolution — split featured artists
     evolution = {}
     for month in month_names:
-        top_q = (
-            select(TrackPlay.artists, func.count().label("plays"))
-            .where(TrackPlay.month == month)
-            .group_by(TrackPlay.artists)
-            .order_by(func.count().desc())
-            .limit(5)
-        )
-        top_artists      = (await db.execute(top_q)).fetchall()
-        evolution[month] = [{"artist": r.artists, "plays": r.plays} for r in top_artists]
+        month_plays_q   = select(TrackPlay.artists).where(TrackPlay.month == month)
+        month_play_rows = (await db.execute(month_plays_q)).fetchall()
+        month_counter   = Counter()
+        for row in month_play_rows:
+            if row.artists:
+                for a in row.artists.split(","):
+                    a = a.strip()
+                    if a:
+                        month_counter[a] += 1
+        evolution[month] = [{"artist": a, "plays": c} for a, c in month_counter.most_common(5)]
 
+    # Top track per month
     top_track_per_month = {}
     for month in month_names:
         track_q = (
@@ -964,29 +1008,37 @@ async def taste_evolution(request: Request, db: AsyncSession = Depends(get_db)):
         if result:
             top_track_per_month[month] = {
                 "name":    result.track_name,
-                "artists": result.artists,
+                "artists": result.artists.split(",")[0].strip() if result.artists else result.artists,
                 "plays":   result.plays,
             }
 
-    all_artists_q = (
-        select(TrackPlay.artists, func.count().label("plays"))
-        .group_by(TrackPlay.artists)
-        .order_by(func.count().desc())
-        .limit(5)
-    )
-    top_5_artists = [(r.artists) for r in (await db.execute(all_artists_q)).fetchall()]
+    # Top 5 artists overall — split featured
+    all_artists_plays_q = select(TrackPlay.artists)
+    all_artists_rows    = (await db.execute(all_artists_plays_q)).fetchall()
+    all_artist_counter  = Counter()
+    for row in all_artists_rows:
+        if row.artists:
+            for a in row.artists.split(","):
+                a = a.strip()
+                if a:
+                    all_artist_counter[a] += 1
+    top_5_artists = [a for a, _ in all_artist_counter.most_common(5)]
 
+    # Chart datasets
     chart_datasets = []
     neon_colors    = ['#ff00ff', '#00ffff', '#ffff00', '#00ff88', '#ff00aa']
     for i, artist in enumerate(top_5_artists):
         data_points = []
         for month in month_names:
-            plays_q = (
-                select(func.count())
-                .where(TrackPlay.month == month)
-                .where(TrackPlay.artists == artist)
+            month_plays_q   = select(TrackPlay.artists).where(TrackPlay.month == month)
+            month_play_rows = (await db.execute(month_plays_q)).fetchall()
+            count = sum(
+                1 for row in month_play_rows
+                if row.artists and any(
+                    a.strip().lower() == artist.lower()
+                    for a in row.artists.split(",")
+                )
             )
-            count = await db.scalar(plays_q) or 0
             data_points.append(count)
         chart_datasets.append({
             "label":           artist,
@@ -1074,7 +1126,7 @@ async def vibe(request: Request, db: AsyncSession = Depends(get_db)):
     mood_labels = [r.auto_mood for r in mood_rows]
     mood_values = [r.cnt for r in mood_rows]
 
-    # ── Mood by hour of day ───────────────────────────────────────────────────
+    # ── Mood by hour ──────────────────────────────────────────────────────────
     mood_hour_q = (
         select(TrackPlay.hour_of_day, TrackPlay.auto_mood, func.count().label("cnt"))
         .where(TrackPlay.auto_mood != None)
@@ -1112,14 +1164,10 @@ async def vibe(request: Request, db: AsyncSession = Depends(get_db)):
     }
     dow_mood_values = [dominant_mood_by_dow.get(d, "—") for d in dow_order]
 
-    # ── Genre distribution — split comma separated genres ─────────────────────
-    all_genre_plays_q = (
-        select(TrackPlay.primary_genre)
-        .where(TrackPlay.primary_genre != None)
-    )
-    all_genre_rows = (await db.execute(all_genre_plays_q)).fetchall()
+    # ── Genre distribution ────────────────────────────────────────────────────
+    all_genre_plays_q = select(TrackPlay.primary_genre).where(TrackPlay.primary_genre != None)
+    all_genre_rows    = (await db.execute(all_genre_plays_q)).fetchall()
 
-    from collections import Counter
     genre_counter = Counter()
     for row in all_genre_rows:
         if row.primary_genre:
@@ -1138,8 +1186,7 @@ async def vibe(request: Request, db: AsyncSession = Depends(get_db)):
         .where(TrackPlay.primary_genre != None)
         .where(TrackPlay.auto_mood != None)
     )
-    genre_mood_rows = (await db.execute(genre_mood_plays_q)).fetchall()
-
+    genre_mood_rows  = (await db.execute(genre_mood_plays_q)).fetchall()
     genre_mood_tally = {}
     for row in genre_mood_rows:
         if row.primary_genre:
@@ -1161,7 +1208,7 @@ async def vibe(request: Request, db: AsyncSession = Depends(get_db)):
                reverse=True)[:20]
     )
 
-    # ── Recent tracks with mood ───────────────────────────────────────────────
+    # ── Recent tracks ─────────────────────────────────────────────────────────
     recent_q = (
         select(TrackPlay)
         .where(TrackPlay.auto_mood != None)
@@ -1179,7 +1226,6 @@ async def vibe(request: Request, db: AsyncSession = Depends(get_db)):
     )
     current_vibe_rows = (await db.execute(current_vibe_q)).fetchall()
     if current_vibe_rows:
-        from collections import Counter
         mood_counter = Counter(r.auto_mood for r in current_vibe_rows)
         current_vibe = mood_counter.most_common(1)[0][0]
     else:
@@ -1200,72 +1246,270 @@ async def vibe(request: Request, db: AsyncSession = Depends(get_db)):
         "current_vibe":     current_vibe,
     })
 
-@app.get("/debug")
-async def debug(db: AsyncSession = Depends(get_db)):
-    recent_q = select(TrackPlay).order_by(TrackPlay.listened_at.desc()).limit(10)
-    recent   = (await db.execute(recent_q)).scalars().fetchall()
-    result   = []
-    for t in recent:
-        result.append({
-            "track":        t.track_name,
-            "auto_mood":    t.auto_mood,
-            "valence":      t.valence,
-            "energy":       t.energy,
-            "genre":        t.primary_genre,
-            "listened_at":  str(t.listened_at),
-            "progress_pct": t.progress_pct,
-        })
-    return result
-
-
-@app.get("/debug-artist/{artist_id}")
-async def debug_artist(artist_id: str):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"https://api.spotify.com/v1/artists/{artist_id}",
-            headers={"Authorization": f"Bearer {token_store['access_token']}"},
-        )
-    return response.json()
-
-
-@app.get("/now-playing-json")
-async def now_playing_json():
+@app.get("/calendar", response_class=HTMLResponse)
+async def calendar(request: Request, db: AsyncSession = Depends(get_db)):
     if "access_token" not in token_store:
-        return {}
+        return RedirectResponse("/")
+
+    # Get all plays with dates
+    all_plays_q = (
+        select(TrackPlay.listened_at, TrackPlay.was_skipped, TrackPlay.progress_ms)
+        .order_by(TrackPlay.listened_at.asc())
+    )
+    all_plays = (await db.execute(all_plays_q)).fetchall()
+
+    # Build daily stats
+    daily_plays    = Counter()
+    daily_skips    = Counter()
+    daily_minutes  = defaultdict(float)
+
+    for play in all_plays:
+        day = play.listened_at.strftime("%Y-%m-%d")
+        daily_plays[day]   += 1
+        daily_minutes[day] += play.progress_ms / 60000
+        if play.was_skipped:
+            daily_skips[day] += 1
+
+    # Build full year grid — last 365 days
+    today     = datetime.now(TIMEZONE).date()
+    start     = today - timedelta(days=364)
+    all_dates = []
+    d         = start
+    while d <= today:
+        date_str = d.strftime("%Y-%m-%d")
+        all_dates.append({
+            "date":    date_str,
+            "plays":   daily_plays.get(date_str, 0),
+            "skips":   daily_skips.get(date_str, 0),
+            "minutes": round(daily_minutes.get(date_str, 0), 1),
+            "dow":     d.weekday(),
+            "month":   d.strftime("%b"),
+            "day":     d.day,
+        })
+        d += timedelta(days=1)
+
+    max_plays = max((d["plays"] for d in all_dates), default=1)
+
+    # Summary stats
+    active_days    = sum(1 for d in all_dates if d["plays"] > 0)
+    total_plays    = sum(d["plays"] for d in all_dates)
+    total_minutes  = round(sum(d["minutes"] for d in all_dates), 1)
+    best_day       = max(all_dates, key=lambda d: d["plays"])
+
+    return templates.TemplateResponse("calendar.html", {
+        "request":       request,
+        "all_dates":     all_dates,
+        "max_plays":     max_plays,
+        "active_days":   active_days,
+        "total_plays":   total_plays,
+        "total_minutes": total_minutes,
+        "best_day":      best_day,
+    })
+
+
+@app.get("/sessions", response_class=HTMLResponse)
+async def peak_sessions(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    all_plays_q = (
+        select(TrackPlay)
+        .order_by(TrackPlay.listened_at.asc())
+    )
+    all_plays = (await db.execute(all_plays_q)).scalars().fetchall()
+
+    # Detect sessions — gap of more than 30 minutes = new session
+    SESSION_GAP_MINUTES = 30
+    sessions            = []
+    current_session     = []
+
+    for play in all_plays:
+        if not current_session:
+            current_session.append(play)
+        else:
+            last = current_session[-1]
+            gap  = (play.listened_at - last.listened_at).total_seconds() / 60
+            if gap <= SESSION_GAP_MINUTES:
+                current_session.append(play)
+            else:
+                sessions.append(current_session)
+                current_session = [play]
+
+    if current_session:
+        sessions.append(current_session)
+
+    # Build session stats
+    session_stats = []
+    for session in sessions:
+        if len(session) < 2:
+            continue
+        start_time   = session[0].listened_at
+        end_time     = session[-1].listened_at
+        duration_min = round((end_time - start_time).total_seconds() / 60, 1)
+        if duration_min < 5:
+            continue
+
+        track_count  = len(session)
+        skip_count   = sum(1 for p in session if p.was_skipped)
+        skip_rate    = round(skip_count / track_count * 100, 1) if track_count else 0
+        total_ms     = sum(p.progress_ms for p in session)
+        minutes      = round(total_ms / 60000, 1)
+
+        # Dominant mood
+        mood_counts  = Counter(p.auto_mood for p in session if p.auto_mood)
+        dominant_mood = mood_counts.most_common(1)[0][0] if mood_counts else "UNKNOWN"
+
+        # Top artist
+        artist_counts = Counter()
+        for p in session:
+            if p.artists:
+                for a in p.artists.split(","):
+                    a = a.strip()
+                    if a:
+                        artist_counts[a] += 1
+        top_artist = artist_counts.most_common(1)[0][0] if artist_counts else "Unknown"
+
+        # Top genre
+        genre_counts = Counter()
+        for p in session:
+            if p.primary_genre:
+                for g in p.primary_genre.split(","):
+                    g = g.strip()
+                    if g:
+                        genre_counts[g.lower()] += 1
+        top_genre = genre_counts.most_common(1)[0][0] if genre_counts else "Unknown"
+
+        # First and last track
+        first_track = session[0].track_name
+        last_track  = session[-1].track_name
+
+        session_stats.append({
+            "start":        start_time.strftime("%m/%d %H:%M"),
+            "end":          end_time.strftime("%H:%M"),
+            "date":         start_time.strftime("%A, %B %d"),
+            "duration_min": duration_min,
+            "track_count":  track_count,
+            "skip_count":   skip_count,
+            "skip_rate":    skip_rate,
+            "minutes":      minutes,
+            "mood":         dominant_mood,
+            "top_artist":   top_artist,
+            "top_genre":    top_genre,
+            "first_track":  first_track,
+            "last_track":   last_track,
+            "album_art":    session[0].album_art_url,
+        })
+
+    # Sort by duration
+    session_stats = sorted(session_stats, key=lambda x: x["duration_min"], reverse=True)
+
+    # Summary
+    total_sessions   = len(session_stats)
+    avg_duration     = round(sum(s["duration_min"] for s in session_stats) / total_sessions, 1) if total_sessions else 0
+    longest_session  = session_stats[0] if session_stats else None
+    avg_tracks       = round(sum(s["track_count"] for s in session_stats) / total_sessions, 1) if total_sessions else 0
+
+    return templates.TemplateResponse("sessions.html", {
+        "request":         request,
+        "sessions":        session_stats[:50],
+        "total_sessions":  total_sessions,
+        "avg_duration":    avg_duration,
+        "longest_session": longest_session,
+        "avg_tracks":      avg_tracks,
+    })
+
+@app.get("/artist-graph", response_class=HTMLResponse)
+async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    # Get ALL tracks including solo artists
+    all_plays_q = (
+        select(TrackPlay.track_name, TrackPlay.artists, TrackPlay.album_art_url)
+        .group_by(TrackPlay.track_id)
+    )
+    all_plays = (await db.execute(all_plays_q)).fetchall()
+
+    from itertools import combinations
+    connections  = defaultdict(lambda: {"count": 0, "tracks": set()})
+    artist_plays = Counter()
+
+    # Count all plays including solo
+    all_artists_q   = select(TrackPlay.artists)
+    all_artist_rows = (await db.execute(all_artists_q)).fetchall()
+    for row in all_artist_rows:
+        if row.artists:
+            for a in row.artists.split(","):
+                a = a.strip()
+                if a:
+                    artist_plays[a] += 1
+
+    # Only build connections for tracks with multiple artists
+    for play in all_plays:
+        artists = [a.strip() for a in play.artists.split(",") if a.strip()]
+        if len(artists) > 1:
+            for a1, a2 in combinations(sorted(artists), 2):
+                key = (a1, a2)
+                connections[key]["count"]  += 1
+                connections[key]["tracks"].add(play.track_name)
+
+    # All artists including solo ones
+    all_artists = set(artist_plays.keys())
+
+    if not all_artists:
+        return templates.TemplateResponse("artist_graph.html", {
+            "request":    request,
+            "graph_data": '{"nodes": [], "links": []}',
+            "node_count": 0,
+            "link_count": 0,
+        })
+
+    # Fetch artist images from Spotify
+    artist_images = {}
     async with httpx.AsyncClient() as client:
-        response = await client.get(
-            SPOTIFY_NOW_PLAYING_URL,
-            headers={"Authorization": f"Bearer {token_store['access_token']}"},
-        )
-    if response.status_code == 200:
-        data = response.json()
-        item = data.get("item")
-        if item:
-            return {
-                "name":      item["name"],
-                "artists":   ", ".join(a["name"] for a in item["artists"]),
-                "album_art": item["album"]["images"][0]["url"] if item["album"]["images"] else None,
-            }
-    return {}
+        for artist_name in list(all_artists)[:80]:
+            try:
+                encoded = urllib.parse.quote(artist_name)
+                resp    = await client.get(
+                    f"https://api.spotify.com/v1/search?q={encoded}&type=artist&limit=1",
+                    headers={"Authorization": f"Bearer {token_store['access_token']}"},
+                )
+                if resp.status_code == 200:
+                    items = resp.json().get("artists", {}).get("items", [])
+                    if items:
+                        images = items[0].get("images", [])
+                        artist_images[artist_name] = images[-1]["url"] if images else None
+                    else:
+                        artist_images[artist_name] = None
+            except Exception:
+                artist_images[artist_name] = None
 
+    # Build nodes — all artists
+    nodes = []
+    for artist in all_artists:
+        nodes.append({
+            "id":         artist,
+            "image":      artist_images.get(artist),
+            "plays":      artist_plays.get(artist, 1),
+            "connected":  any(artist in (a1, a2) for (a1, a2) in connections),
+        })
 
-@app.get("/debug-related-artist/{artist_id}")
-async def debug_related(artist_id: str):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"https://api.spotify.com/v1/artists/{artist_id}/related-artists",
-            headers={"Authorization": f"Bearer {token_store['access_token']}"},
-        )
-    return response.json()
+    # Build links
+    links = []
+    for (a1, a2), data in connections.items():
+        links.append({
+            "source": a1,
+            "target": a2,
+            "count":  data["count"],
+            "tracks": list(data["tracks"]),
+        })
 
-@app.get("/debug-everynoise/{artist_name}")
-async def debug_everynoise(artist_name: str):
-    import httpx
-    import urllib.parse
-    encoded = urllib.parse.quote(artist_name)
-    async with httpx.AsyncClient(timeout=8.0) as client:
-        response = await client.get(
-            f"https://everynoise.com/lookup.cgi?who={encoded}",
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
-        )
-    return {"status": response.status_code, "body": response.text[:2000]}
+    import json
+    graph_data = json.dumps({"nodes": nodes, "links": links})
+
+    return templates.TemplateResponse("artist_graph.html", {
+        "request":    request,
+        "graph_data": graph_data,
+        "node_count": len(nodes),
+        "link_count": len(links),
+    })

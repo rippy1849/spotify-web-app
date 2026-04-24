@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SESSIONS // RAVE FM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Share Tech Mono', monospace; min-height: 100vh; background: #000; color: #fff; padding: 40px 20px; }
+        .scanlines { pointer-events: none; position: fixed; inset: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 4px); z-index: 10; }
+        .bg { position: fixed; inset: 0; background: radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%), #000; animation: bgshift 6s ease-in-out infinite alternate; z-index: 0; }
+        @keyframes bgshift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(180deg); } }
+        .content { position: relative; z-index: 5; max-width: 1000px; margin: 0 auto; }
+        h1 { font-family: 'Orbitron', sans-serif; font-size: 2.5rem; font-weight: 900; background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff); background-size: 300% 100%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: rainbowShift 4s linear infinite; filter: drop-shadow(0 0 12px #ff00ff); letter-spacing: 4px; margin-bottom: 8px; }
+        @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+        .subtitle { color: #00ffff; text-shadow: 0 0 8px #00ffff; letter-spacing: 4px; font-size: 0.75rem; margin-bottom: 40px; }
+        .nav { display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+        .nav a { color: #ff00aa; text-decoration: none; font-size: 0.75rem; letter-spacing: 2px; text-shadow: 0 0 8px #ff00aa; }
+        .nav a:hover { color: #fff; }
+        h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 4px; color: #ffff00; text-shadow: 0 0 10px #ffff0088; margin-bottom: 16px; border-bottom: 1px solid #ffff0033; padding-bottom: 8px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 40px; }
+        .stat-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff44; border-radius: 10px; padding: 20px; text-align: center; }
+        .stat-value { font-family: 'Orbitron', sans-serif; font-size: 1.6rem; font-weight: 900; color: #00ffff; text-shadow: 0 0 16px #00ffff; }
+        .stat-label { font-size: 0.62rem; letter-spacing: 2px; color: #ff00aa; margin-top: 6px; }
+
+        .session-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff22;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin-bottom: 16px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 20px;
+            align-items: center;
+            transition: background 0.2s;
+        }
+
+        .session-card:hover { background: rgba(255,255,255,0.05); }
+
+        .session-card.longest {
+            border-color: #ffff0066;
+            box-shadow: 0 0 20px #ffff0022;
+        }
+
+        .session-art {
+            width: 56px;
+            height: 56px;
+            border-radius: 6px;
+            object-fit: cover;
+            border: 1px solid #ff00ff44;
+            flex-shrink: 0;
+        }
+
+        .session-art-placeholder {
+            width: 56px;
+            height: 56px;
+            border-radius: 6px;
+            background: #ff00ff22;
+            border: 1px solid #ff00ff44;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .session-info .date {
+            font-size: 0.7rem;
+            color: #ff00aa;
+            letter-spacing: 2px;
+            margin-bottom: 4px;
+        }
+
+        .session-info .time {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            color: #fff;
+            margin-bottom: 6px;
+        }
+
+        .session-info .tracks {
+            font-size: 0.72rem;
+            color: #888;
+        }
+
+        .session-info .tracks span { color: #00ffff; margin-right: 12px; }
+
+        .session-meta { text-align: right; }
+
+        .session-duration {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 900;
+            color: #00ffff;
+            text-shadow: 0 0 12px #00ffff;
+            margin-bottom: 4px;
+        }
+
+        .session-mood {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 99px;
+            font-size: 0.65rem;
+            letter-spacing: 2px;
+            background: #ff00ff22;
+            border: 1px solid #ff00ff55;
+            color: #ff00ff;
+            margin-bottom: 4px;
+        }
+
+        .session-genre {
+            font-size: 0.65rem;
+            color: #00ffff88;
+            letter-spacing: 1px;
+        }
+
+        .crown { font-size: 0.7rem; color: #ffff00; margin-right: 6px; }
+
+        .empty { color: #555; font-size: 0.8rem; letter-spacing: 2px; text-align: center; padding: 40px 0; }
+
+        @media (max-width: 700px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .session-card { grid-template-columns: 1fr; }
+            .session-meta { text-align: left; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/stats">◈ STATS</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+
+        <h1>SESSIONS</h1>
+        <p class="subtitle">◈ YOUR LISTENING SESSIONS ◈</p>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_sessions }}</div>
+                <div class="stat-label">TOTAL SESSIONS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ avg_duration }}m</div>
+                <div class="stat-label">AVG DURATION</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ avg_tracks }}</div>
+                <div class="stat-label">AVG TRACKS/SESSION</div>
+            </div>
+            {% if longest_session %}
+            <div class="stat-card">
+                <div class="stat-value">{{ longest_session.duration_min }}m</div>
+                <div class="stat-label">LONGEST SESSION</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <h2>⚡ TOP SESSIONS BY LENGTH</h2>
+
+        {% if sessions %}
+            {% for session in sessions %}
+            <div class="session-card {% if loop.first %}longest{% endif %}">
+                <div>
+                    {% if session.album_art %}
+                    <img class="session-art" src="{{ session.album_art }}" alt="art">
+                    {% else %}
+                    <div class="session-art-placeholder">🎵</div>
+                    {% endif %}
+                </div>
+
+                <div class="session-info">
+                    <div class="date">
+                        {% if loop.first %}<span class="crown">👑</span>{% endif %}
+                        {{ session.date }}
+                    </div>
+                    <div class="time">{{ session.start }} → {{ session.end }}</div>
+                    <div class="tracks">
+                        <span>▶ {{ session.track_count }} tracks</span>
+                        <span>⏭ {{ session.skip_count }} skips ({{ session.skip_rate }}%)</span>
+                        <span>🎤 {{ session.top_artist }}</span>
+                    </div>
+                    <div class="tracks" style="margin-top:4px; color:#666;">
+                        First: {{ session.first_track }} → Last: {{ session.last_track }}
+                    </div>
+                </div>
+
+                <div class="session-meta">
+                    <div class="session-duration">{{ session.duration_min }}m</div>
+                    <div class="session-mood">{{ session.mood }}</div>
+                    <div class="session-genre">{{ session.top_genre }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="empty">// NOT ENOUGH DATA YET //</p>
+        {% endif %}
+    </div>
+</body>
+</html>
