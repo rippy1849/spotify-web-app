@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TIME MACHINE // RAVE FM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Share Tech Mono', monospace; min-height: 100vh; background: #000; color: #fff; padding: 40px 20px; }
+        .scanlines { pointer-events: none; position: fixed; inset: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 4px); z-index: 10; }
+        .bg { position: fixed; inset: 0; background: radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%), #000; animation: bgshift 6s ease-in-out infinite alternate; z-index: 0; }
+        @keyframes bgshift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(180deg); } }
+        .content { position: relative; z-index: 5; max-width: 1000px; margin: 0 auto; }
+        h1 { font-family: 'Orbitron', sans-serif; font-size: 2.5rem; font-weight: 900; background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff); background-size: 300% 100%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: rainbowShift 4s linear infinite; filter: drop-shadow(0 0 12px #ff00ff); letter-spacing: 4px; margin-bottom: 8px; }
+        @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+        .subtitle { color: #00ffff; text-shadow: 0 0 8px #00ffff; letter-spacing: 4px; font-size: 0.75rem; margin-bottom: 40px; }
+        .nav { display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+        .nav a { color: #ff00aa; text-decoration: none; font-size: 0.75rem; letter-spacing: 2px; text-shadow: 0 0 8px #ff00aa; }
+        .nav a:hover { color: #fff; }
+        h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 4px; color: #ffff00; text-shadow: 0 0 10px #ffff0088; margin-bottom: 16px; border-bottom: 1px solid #ffff0033; padding-bottom: 8px; }
+
+        /* ── Date picker ── */
+        .date-picker {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff44;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 40px;
+            box-shadow: 0 0 30px #ff00ff22;
+        }
+
+        .date-picker-inner {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .date-picker select {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid #ff00ff44;
+            border-radius: 4px;
+            padding: 10px 16px;
+            color: #fff;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.85rem;
+            letter-spacing: 2px;
+            outline: none;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            min-width: 180px;
+        }
+
+        .date-picker select:focus { border-color: #ff00ff; box-shadow: 0 0 16px #ff00ff44; }
+        .date-picker select option { background: #111; }
+
+        .go-btn {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+            letter-spacing: 3px;
+            padding: 10px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 700;
+            color: #000;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ff00ff);
+            background-size: 200%;
+            animation: btnShift 1.5s linear infinite;
+            box-shadow: 0 0 20px #ff00ff;
+        }
+
+        @keyframes btnShift { 0% { background-position: 0%; } 100% { background-position: 200%; } }
+
+        /* ── Stats grid ── */
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 40px; }
+        .stat-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff44; border-radius: 10px; padding: 20px; text-align: center; box-shadow: 0 0 20px #ff00ff22; }
+        .stat-value { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; font-weight: 900; color: #00ffff; text-shadow: 0 0 16px #00ffff; }
+        .stat-label { font-size: 0.62rem; letter-spacing: 2px; color: #ff00aa; margin-top: 6px; }
+
+        /* ── Highlight cards ── */
+        .highlight-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 40px; }
+
+        .highlight-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff22;
+            border-radius: 10px;
+            padding: 18px 22px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .highlight-card img {
+            width: 52px;
+            height: 52px;
+            border-radius: 6px;
+            object-fit: cover;
+            border: 1px solid #ff00ff33;
+            flex-shrink: 0;
+        }
+
+        .highlight-card .hc-label { font-size: 0.62rem; letter-spacing: 3px; color: #ff00aa; margin-bottom: 4px; }
+        .highlight-card .hc-value { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; color: #fff; letter-spacing: 1px; }
+        .highlight-card .hc-sub   { font-size: 0.68rem; color: #00ffff; margin-top: 3px; }
+
+        /* ── Timeline ── */
+        .timeline { margin-bottom: 40px; }
+
+        .timeline-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 0;
+            border-bottom: 1px solid #ffffff08;
+            transition: background 0.15s;
+        }
+
+        .timeline-item:hover { background: #ffffff05; }
+
+        .timeline-item .time {
+            font-size: 0.68rem;
+            color: #ff00aa;
+            letter-spacing: 1px;
+            width: 48px;
+            flex-shrink: 0;
+        }
+
+        .timeline-item img {
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+
+        .timeline-item .info { flex: 1; min-width: 0; }
+        .timeline-item .info .name { font-size: 0.82rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .timeline-item .info .artist { font-size: 0.7rem; color: #00ffff; letter-spacing: 1px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .timeline-item .mood-pill {
+            font-size: 0.58rem;
+            letter-spacing: 1px;
+            padding: 2px 8px;
+            border-radius: 99px;
+            background: #ff00ff22;
+            border: 1px solid #ff00ff44;
+            color: #ff00ff;
+            flex-shrink: 0;
+        }
+
+        .skipped-badge { display: inline-block; background: #ff00aa22; color: #ff00aa; border: 1px solid #ff00aa55; border-radius: 4px; padding: 2px 6px; font-size: 0.58rem; letter-spacing: 2px; flex-shrink: 0; }
+        .played-badge  { display: inline-block; background: #00ff8822; color: #00ff88; border: 1px solid #00ff8855; border-radius: 4px; padding: 2px 6px; font-size: 0.58rem; letter-spacing: 2px; flex-shrink: 0; }
+
+        .vs-avg { font-size: 0.7rem; letter-spacing: 1px; }
+        .vs-avg.up   { color: #00ff88; }
+        .vs-avg.down { color: #ff00aa; }
+
+        .empty { color: #555; font-size: 0.8rem; letter-spacing: 2px; text-align: center; padding: 60px 0; }
+
+        .mood-hero {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowShift 4s linear infinite;
+            letter-spacing: 4px;
+        }
+
+        @media (max-width: 700px) {
+            .stats-grid     { grid-template-columns: repeat(2, 1fr); }
+            .highlight-grid { grid-template-columns: 1fr; }
+        }
+
+.date-input-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.date-input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    color-scheme: dark;
+}
+
+.calendar-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid #ff00ff44;
+    border-radius: 4px;
+    padding: 12px 24px;
+    color: #ff00ff;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.82rem;
+    letter-spacing: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 0 10px #ff00ff22;
+}
+
+.calendar-btn:hover {
+    border-color: #ff00ff;
+    background: rgba(255,0,255,0.1);
+    box-shadow: 0 0 20px #ff00ff44;
+}
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/stats">◈ STATS</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+
+        <h1>TIME MACHINE</h1>
+        <p class="subtitle">◈ TRAVEL BACK IN TIME ◈</p>
+
+<!-- Date picker -->
+<div class="date-picker">
+    <div class="date-picker-inner">
+        <div>
+            <div style="font-size:0.65rem; letter-spacing:3px; color:#ff00aa; margin-bottom:8px;">SELECT A DATE</div>
+            <div class="date-input-wrap">
+                <input type="date"
+                       id="datePicker"
+                       class="date-input"
+                       value="{{ selected_date or '' }}"
+                       min="{{ available_dates[-1] if available_dates else '' }}"
+                       max="{{ available_dates[0] if available_dates else '' }}">
+                <button class="calendar-btn" onclick="document.getElementById('datePicker').showPicker()">
+                    📅 PICK A DATE
+                </button>
+            </div>
+            {% if selected_date %}
+            <div style="font-size:0.65rem; letter-spacing:2px; color:#00ffff; margin-top:8px;">
+                VIEWING: {{ selected_date }}
+            </div>
+            {% endif %}
+        </div>
+        {% if available_dates %}
+        <div style="font-size:0.65rem; letter-spacing:2px; color:#555; align-self:flex-end; padding-bottom:2px;">
+            {{ available_dates|length }} days in history
+            · earliest {{ available_dates[-1] }}
+            · latest {{ available_dates[0] }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+        {% if not selected_date %}
+            <p class="empty">// SELECT A DATE TO TRAVEL BACK //</p>
+
+        {% elif not plays %}
+            <p class="empty">// NO PLAYS RECORDED ON {{ selected_date }} //</p>
+
+        {% else %}
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.total }}</div>
+                <div class="stat-label">TRACKS PLAYED</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.skip_rate }}%</div>
+                <div class="stat-label">SKIP RATE</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.minutes }}m</div>
+                <div class="stat-label">MINUTES</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.unique_artists }}</div>
+                <div class="stat-label">UNIQUE ARTISTS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.unique_tracks }}</div>
+                <div class="stat-label">UNIQUE TRACKS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.skips }}</div>
+                <div class="stat-label">SKIPS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">
+                    {% if stats.peak_hour %}
+                        {{ "%02d:00" | format(stats.peak_hour[0]) }}
+                    {% else %}—{% endif %}
+                </div>
+                <div class="stat-label">PEAK HOUR</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">
+                    <span class="vs-avg {% if stats.vs_average >= 0 %}up{% else %}down{% endif %}">
+                        {% if stats.vs_average >= 0 %}+{% endif %}{{ stats.vs_average }}%
+                    </span>
+                </div>
+                <div class="stat-label">VS AVERAGE DAY</div>
+            </div>
+        </div>
+
+        <!-- Highlights -->
+        <div class="highlight-grid">
+            <div class="highlight-card">
+                <div>
+                    <div class="hc-label">🎵 DOMINANT VIBE</div>
+                    <div class="mood-hero">{{ stats.dominant_mood }}</div>
+                </div>
+            </div>
+
+            {% if stats.top_genre %}
+            <div class="highlight-card">
+                <div>
+                    <div class="hc-label">🎸 TOP GENRE</div>
+                    <div class="hc-value">{{ stats.top_genre }}</div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if stats.top_artist %}
+            <div class="highlight-card">
+                <div>
+                    <div class="hc-label">🎤 TOP ARTIST</div>
+                    <div class="hc-value">{{ stats.top_artist[0] }}</div>
+                    <div class="hc-sub">{{ stats.top_artist[1] }} plays</div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if stats.top_track %}
+            <div class="highlight-card">
+                <div>
+                    <div class="hc-label">⚡ TOP TRACK</div>
+                    <div class="hc-value">{{ stats.top_track[0] }}</div>
+                    <div class="hc-sub">{{ stats.top_track[1] }} plays</div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if stats.first_track %}
+            <div class="highlight-card">
+                {% if stats.first_track.album_art_url %}
+                <img src="{{ stats.first_track.album_art_url }}" alt="art">
+                {% endif %}
+                <div>
+                    <div class="hc-label">🌅 FIRST TRACK</div>
+                    <div class="hc-value">{{ stats.first_track.track_name }}</div>
+                    <div class="hc-sub">{{ stats.first_track.listened_at.strftime("%H:%M") }}</div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if stats.last_track %}
+            <div class="highlight-card">
+                {% if stats.last_track.album_art_url %}
+                <img src="{{ stats.last_track.album_art_url }}" alt="art">
+                {% endif %}
+                <div>
+                    <div class="hc-label">🌙 LAST TRACK</div>
+                    <div class="hc-value">{{ stats.last_track.track_name }}</div>
+                    <div class="hc-sub">{{ stats.last_track.listened_at.strftime("%H:%M") }}</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Full timeline -->
+        <h2>📋 FULL TIMELINE</h2>
+        <div class="timeline">
+            {% for play in plays %}
+            <div class="timeline-item">
+                <div class="time">{{ play.listened_at.strftime("%H:%M") }}</div>
+                {% if play.album_art_url %}
+                <img src="{{ play.album_art_url }}" alt="art">
+                {% endif %}
+                <div class="info">
+                    <div class="name">{{ play.track_name }}</div>
+                    <div class="artist">{{ play.artists }}</div>
+                </div>
+                {% if play.auto_mood and play.auto_mood != 'UNKNOWN' %}
+                <span class="mood-pill">{{ play.auto_mood }}</span>
+                {% endif %}
+                {% if play.was_skipped %}
+                    <span class="skipped-badge">SKIP</span>
+                {% else %}
+                    <span class="played-badge">✓</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {% endif %}
+    </div>
+
+    <script>
+    document.getElementById('datePicker').addEventListener('change', function() {
+    const date = this.value;
+    if (date) {
+        window.location.href = `/time-machine/${date}`;
+    }
+});
+    </script>
+</body>
+</html>

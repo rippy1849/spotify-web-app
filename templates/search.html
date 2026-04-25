@@ -8,94 +8,24 @@
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        body {
-            font-family: 'Share Tech Mono', monospace;
-            min-height: 100vh;
-            background: #000;
-            color: #fff;
-            padding: 40px 20px;
-        }
+        body { font-family: 'Share Tech Mono', monospace; min-height: 100vh; background: #000; color: #fff; padding: 40px 20px; }
 
-        .scanlines {
-            pointer-events: none;
-            position: fixed;
-            inset: 0;
-            background: repeating-linear-gradient(
-                to bottom,
-                transparent 0px,
-                transparent 3px,
-                rgba(0,0,0,0.12) 3px,
-                rgba(0,0,0,0.12) 4px
-            );
-            z-index: 10;
-        }
+        .scanlines { pointer-events: none; position: fixed; inset: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 4px); z-index: 10; }
 
-        .bg {
-            position: fixed;
-            inset: 0;
-            background:
-                radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%),
-                radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%),
-                #000;
-            animation: bgshift 6s ease-in-out infinite alternate;
-            z-index: 0;
-        }
+        .bg { position: fixed; inset: 0; background: radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%), #000; animation: bgshift 6s ease-in-out infinite alternate; z-index: 0; }
 
-        @keyframes bgshift {
-            from { filter: hue-rotate(0deg); }
-            to   { filter: hue-rotate(180deg); }
-        }
+        @keyframes bgshift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(180deg); } }
 
-        .content {
-            position: relative;
-            z-index: 5;
-            max-width: 800px;
-            margin: 0 auto;
-        }
+        .content { position: relative; z-index: 5; max-width: 800px; margin: 0 auto; }
 
-        h1 {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 2.5rem;
-            font-weight: 900;
-            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
-            background-size: 300% 100%;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            animation: rainbowShift 4s linear infinite;
-            filter: drop-shadow(0 0 12px #ff00ff);
-            letter-spacing: 4px;
-            margin-bottom: 8px;
-        }
+        h1 { font-family: 'Orbitron', sans-serif; font-size: 2.5rem; font-weight: 900; background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff); background-size: 300% 100%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: rainbowShift 4s linear infinite; filter: drop-shadow(0 0 12px #ff00ff); letter-spacing: 4px; margin-bottom: 8px; }
 
-        @keyframes rainbowShift {
-            0%   { background-position: 0% 50%; }
-            100% { background-position: 300% 50%; }
-        }
+        @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
 
-        .subtitle {
-            color: #00ffff;
-            text-shadow: 0 0 8px #00ffff;
-            letter-spacing: 4px;
-            font-size: 0.75rem;
-            margin-bottom: 40px;
-        }
+        .subtitle { color: #00ffff; text-shadow: 0 0 8px #00ffff; letter-spacing: 4px; font-size: 0.75rem; margin-bottom: 40px; }
 
-        .nav {
-            display: flex;
-            gap: 24px;
-            margin-bottom: 32px;
-            flex-wrap: wrap;
-        }
-
-        .nav a {
-            color: #ff00aa;
-            text-decoration: none;
-            font-size: 0.75rem;
-            letter-spacing: 2px;
-            text-shadow: 0 0 8px #ff00aa;
-        }
-
+        .nav { display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+        .nav a { color: #ff00aa; text-decoration: none; font-size: 0.75rem; letter-spacing: 2px; text-shadow: 0 0 8px #ff00aa; }
         .nav a:hover { color: #fff; }
 
         .search-form {
@@ -141,10 +71,7 @@
             box-shadow: 0 0 20px #ff00ff;
         }
 
-        @keyframes btnShift {
-            0%   { background-position: 0%; }
-            100% { background-position: 200%; }
-        }
+        @keyframes btnShift { 0% { background-position: 0%; } 100% { background-position: 200%; } }
 
         .results-count {
             color: #888;
@@ -224,13 +151,18 @@
             margin-top: 4px;
         }
 
-        .empty {
-            color: #555;
-            font-size: 0.8rem;
-            letter-spacing: 2px;
+        .empty { color: #555; font-size: 0.8rem; letter-spacing: 2px; text-align: center; padding: 40px 0; }
+
+        .loading {
+            color: #ff00aa;
+            font-size: 0.75rem;
+            letter-spacing: 3px;
             text-align: center;
-            padding: 40px 0;
+            padding: 24px 0;
+            animation: pulse 1s ease-in-out infinite alternate;
         }
+
+        @keyframes pulse { from { opacity: 0.4; } to { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -247,44 +179,104 @@
         <h1>SEARCH</h1>
         <p class="subtitle">◈ YOUR HISTORY ◈</p>
 
-        <form class="search-form" method="get" action="/search">
+        <form class="search-form" id="searchForm">
             <input
                 type="text"
                 name="q"
+                id="searchInput"
                 value="{{ query }}"
                 placeholder="TRACK, ARTIST, OR ALBUM..."
-                autofocus
+                autocomplete="off"
             >
             <button type="submit">SEARCH</button>
         </form>
 
-        {% if query %}
-            <p class="results-count">{{ results | length }} RESULT(S) FOR "{{ query }}"</p>
-            {% if results %}
-                {% for play in results %}
-                <div class="result-item">
-                    {% if play.album_art_url %}
-                    <img src="{{ play.album_art_url }}" alt="art">
-                    {% endif %}
-                    <div class="info">
-                        <div class="name">{{ play.track_name }}</div>
-                        <div class="artist">{{ play.artists }}</div>
-                        <div class="album">{{ play.album }}</div>
-                    </div>
-                    <div class="meta">
-                        <div class="date">{{ play.listened_at.strftime("%m/%d %H:%M") }}</div>
-                        {% if play.was_skipped %}
-                            <span class="skipped-badge">SKIPPED</span>
-                        {% else %}
-                            <span class="played-badge">PLAYED</span>
+        <div id="resultsContainer">
+            {% if query %}
+                <p class="results-count">{{ results | length }} RESULT(S) FOR "{{ query }}"</p>
+                {% if results %}
+                    {% for play in results %}
+                    <div class="result-item">
+                        {% if play.album_art_url %}
+                        <img src="{{ play.album_art_url }}" alt="art">
                         {% endif %}
+                        <div class="info">
+                            <div class="name">{{ play.track_name }}</div>
+                            <div class="artist">{{ play.artists }}</div>
+                            <div class="album">{{ play.album }}</div>
+                        </div>
+                        <div class="meta">
+                            <div class="date">{{ play.listened_at.strftime("%m/%d %H:%M") }}</div>
+                            {% if play.was_skipped %}
+                                <span class="skipped-badge">SKIPPED</span>
+                            {% else %}
+                                <span class="played-badge">PLAYED</span>
+                            {% endif %}
+                        </div>
                     </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <p class="empty">// NO RESULTS FOUND //</p>
+                    {% endfor %}
+                {% else %}
+                    <p class="empty">// NO RESULTS FOUND //</p>
+                {% endif %}
             {% endif %}
-        {% endif %}
+        </div>
     </div>
+
+    <script>
+        const searchInput      = document.getElementById('searchInput');
+        const resultsContainer = document.getElementById('resultsContainer');
+        let   searchTimer      = null;
+
+        // Autofocus on load
+        document.addEventListener('DOMContentLoaded', () => {
+            searchInput.focus();
+            const len = searchInput.value.length;
+            searchInput.setSelectionRange(len, len);
+            if (searchInput.value.trim()) {
+                doSearch(searchInput.value.trim());
+            }
+        });
+
+        // Live search as you type
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchTimer);
+            const q = searchInput.value.trim();
+
+            if (!q) {
+                resultsContainer.innerHTML = '<p class="empty">// TYPE TO SEARCH YOUR HISTORY //</p>';
+                return;
+            }
+
+            // Show loading indicator
+            resultsContainer.innerHTML = '<p class="loading">SEARCHING...</p>';
+
+            // Debounce — wait 200ms after typing stops
+            searchTimer = setTimeout(() => doSearch(q), 200);
+        });
+
+        async function doSearch(q) {
+            try {
+                const resp = await fetch(`/search?q=${encodeURIComponent(q)}`);
+                const html = await resp.text();
+
+                const parser  = new DOMParser();
+                const doc     = parser.parseFromString(html, 'text/html');
+                const results = doc.getElementById('resultsContainer');
+
+                if (results) {
+                    resultsContainer.innerHTML = results.innerHTML;
+                }
+            } catch(e) {
+                resultsContainer.innerHTML = '<p class="empty">// ERROR SEARCHING //</p>';
+            }
+        }
+
+        // Prevent form from navigating — use live search instead
+        document.getElementById('searchForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const q = searchInput.value.trim();
+            if (q) doSearch(q);
+        });
+    </script>
 </body>
 </html>

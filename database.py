@@ -16,5 +16,5 @@ class Base(DeclarativeBase):
 
 async def init_db():
     async with engine.begin() as conn:
-        from models import TrackPlay, ArtistCache
+        from models import TrackPlay, ArtistCache, ArtistSpotifyID
         await conn.run_sync(Base.metadata.create_all)

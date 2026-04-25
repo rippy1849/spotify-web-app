@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ARTIST DIVE // RAVE FM</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Share Tech Mono', monospace; min-height: 100vh; background: #000; color: #fff; padding: 40px 20px; }
+        .scanlines { pointer-events: none; position: fixed; inset: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 4px); z-index: 10; }
+        .bg { position: fixed; inset: 0; background: radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%), #000; animation: bgshift 6s ease-in-out infinite alternate; z-index: 0; }
+        @keyframes bgshift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(180deg); } }
+        .content { position: relative; z-index: 5; max-width: 1000px; margin: 0 auto; }
+        @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+        .nav { display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+        .nav a { color: #ff00aa; text-decoration: none; font-size: 0.75rem; letter-spacing: 2px; text-shadow: 0 0 8px #ff00aa; }
+        .nav a:hover { color: #fff; }
+        h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 4px; color: #ffff00; text-shadow: 0 0 10px #ffff0088; margin-bottom: 16px; border-bottom: 1px solid #ffff0033; padding-bottom: 8px; }
+
+        /* ── Hero ── */
+        .hero {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            margin-bottom: 40px;
+            padding: 32px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff33;
+            border-radius: 16px;
+            box-shadow: 0 0 40px #ff00ff22;
+        }
+
+        .hero-art {
+            width: 140px;
+            height: 140px;
+            border-radius: 12px;
+            object-fit: cover;
+            flex-shrink: 0;
+            border: 2px solid #ff00ff44;
+            box-shadow: 0 0 30px #ff00ff44;
+        }
+
+        .hero-art-placeholder {
+            width: 140px;
+            height: 140px;
+            border-radius: 12px;
+            background: #ff00ff22;
+            border: 2px solid #ff00ff44;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            flex-shrink: 0;
+        }
+
+        .hero-info h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowShift 4s linear infinite;
+            filter: drop-shadow(0 0 12px #ff00ff);
+            letter-spacing: 4px;
+            margin-bottom: 12px;
+        }
+
+        .hero-genres {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .genre-tag {
+            background: #ff00ff22;
+            border: 1px solid #ff00ff44;
+            border-radius: 99px;
+            padding: 3px 10px;
+            font-size: 0.62rem;
+            letter-spacing: 2px;
+            color: #ff00ff;
+        }
+
+        .hero-meta {
+            font-size: 0.68rem;
+            color: #888;
+            letter-spacing: 1px;
+            line-height: 1.8;
+        }
+
+        .hero-meta span { color: #00ffff; }
+
+        /* ── Stats grid ── */
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 40px; }
+        .stat-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff44; border-radius: 10px; padding: 20px; text-align: center; }
+        .stat-value { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; font-weight: 900; color: #00ffff; text-shadow: 0 0 16px #00ffff; }
+        .stat-label { font-size: 0.62rem; letter-spacing: 2px; color: #ff00aa; margin-top: 6px; }
+
+        /* ── Two col ── */
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 40px; }
+
+        /* ── Track list ── */
+        .section { margin-bottom: 40px; }
+
+        .track-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 10px 0;
+            border-bottom: 1px solid #ffffff08;
+            transition: background 0.15s;
+        }
+
+        .track-item:hover { background: #ffffff05; }
+
+        .track-item .rank {
+            font-size: 0.7rem;
+            color: #ff00aa;
+            width: 20px;
+            flex-shrink: 0;
+            text-align: right;
+        }
+
+        .track-item img {
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+
+        .track-item .img-placeholder {
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+            background: #ff00ff22;
+            flex-shrink: 0;
+        }
+
+        .track-item .info { flex: 1; min-width: 0; }
+        .track-item .info .name { font-size: 0.82rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .track-item .info .sub  { font-size: 0.65rem; color: #888; margin-top: 2px; letter-spacing: 1px; }
+
+        .track-item .plays-badge {
+            font-size: 0.65rem;
+            color: #00ffff;
+            flex-shrink: 0;
+            letter-spacing: 1px;
+        }
+
+        .skip-rate-bar {
+            width: 60px;
+            height: 4px;
+            background: #ffffff15;
+            border-radius: 99px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .skip-rate-fill {
+            height: 100%;
+            border-radius: 99px;
+            background: #ff00aa;
+        }
+
+        /* ── Co-artists ── */
+        .co-artist-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 10px;
+        }
+
+        .co-artist-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff22;
+            border-radius: 8px;
+            padding: 12px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            text-decoration: none;
+            transition: background 0.15s;
+        }
+
+        .co-artist-card:hover { background: rgba(255,0,255,0.08); border-color: #ff00ff44; }
+        .co-artist-card .ca-name  { font-size: 0.72rem; color: #00ffff; letter-spacing: 1px; }
+        .co-artist-card .ca-count { font-size: 0.62rem; color: #555; }
+
+        /* ── Mood breakdown ── */
+        .mood-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+        }
+
+        .mood-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff22;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .mood-card .mc-mood  { font-size: 0.62rem; letter-spacing: 2px; color: #ff00ff; margin-bottom: 4px; }
+        .mood-card .mc-count { font-family: 'Orbitron', sans-serif; font-size: 1rem; color: #00ffff; }
+
+        /* ── Chart ── */
+        .chart-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff22; border-radius: 10px; padding: 20px; margin-bottom: 40px; height: 220px; }
+
+        .empty { color: #555; font-size: 0.8rem; letter-spacing: 2px; text-align: center; padding: 60px 0; }
+
+        .played-badge  { display: inline-block; background: #00ff8822; color: #00ff88; border: 1px solid #00ff8855; border-radius: 4px; padding: 2px 6px; font-size: 0.58rem; letter-spacing: 2px; }
+        .skipped-badge { display: inline-block; background: #ff00aa22; color: #ff00aa; border: 1px solid #ff00aa55; border-radius: 4px; padding: 2px 6px; font-size: 0.58rem; letter-spacing: 2px; }
+
+        @media (max-width: 700px) {
+            .hero        { flex-direction: column; text-align: center; }
+            .stats-grid  { grid-template-columns: repeat(2, 1fr); }
+            .two-col     { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/stats">◈ STATS</a>
+            <a href="/artist-search">🔍 SEARCH ARTIST</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+
+        {% if not found %}
+            <p class="empty">// NO DATA FOUND FOR "{{ artist_name }}" //</p>
+        {% else %}
+
+        <!-- Hero -->
+        <div class="hero">
+            {% if artist_image %}
+            <img class="hero-art" src="{{ artist_image }}" alt="{{ artist_name }}">
+            {% else %}
+            <div class="hero-art-placeholder">🎤</div>
+            {% endif %}
+            <div class="hero-info">
+                <h1>{{ artist_name }}</h1>
+                {% if top_genres %}
+                <div class="hero-genres">
+                    {% for genre in top_genres %}
+                    <span class="genre-tag">{{ genre }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div class="hero-meta">
+                    First played <span>{{ first_play.listened_at.strftime("%B %d, %Y") }}</span>
+                    · Last played <span>{{ latest_play.listened_at.strftime("%B %d, %Y") }}</span>
+                    · <span>{{ unique_albums }}</span> albums
+                    {% if peak_hour is not none %}
+                    · Peak hour <span>{{ "%02d:00" | format(peak_hour) }}</span>
+                    {% endif %}
+                    {% if peak_dow %}
+                    · Peak day <span>{{ peak_dow }}</span>
+                    {% endif %}
+                    {% if dominant_mood and dominant_mood != 'UNKNOWN' %}
+                    · Dominant mood <span>{{ dominant_mood }}</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ total }}</div>
+                <div class="stat-label">TOTAL PLAYS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ minutes }}m</div>
+                <div class="stat-label">MINUTES LISTENED</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ skip_rate }}%</div>
+                <div class="stat-label">SKIP RATE</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ completion }}%</div>
+                <div class="stat-label">COMPLETION RATE</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ skips }}</div>
+                <div class="stat-label">TOTAL SKIPS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ max_streak }}</div>
+                <div class="stat-label">LONGEST STREAK</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ most_played_tracks | length }}</div>
+                <div class="stat-label">UNIQUE TRACKS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ unique_albums }}</div>
+                <div class="stat-label">ALBUMS</div>
+            </div>
+        </div>
+
+        <!-- Play trend chart -->
+        {% if monthly_labels %}
+        <div class="section">
+            <h2>📈 PLAY TREND</h2>
+            <div class="chart-card">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Most played tracks -->
+        <div class="section">
+            <h2>⚡ MOST PLAYED TRACKS</h2>
+            {% for t in most_played_tracks %}
+            <div class="track-item">
+                <div class="rank">{{ loop.index }}</div>
+                {% if t.art %}
+                <img src="{{ t.art }}" alt="art">
+                {% else %}
+                <div class="img-placeholder"></div>
+                {% endif %}
+                <div class="info">
+                    <div class="name">{{ t.name }}</div>
+                    <div class="sub">{{ t.album or "—" }} · skip rate {{ t.skip_rate }}%</div>
+                </div>
+                <div class="skip-rate-bar">
+                    <div class="skip-rate-fill" style="width:{{ t.skip_rate }}%"></div>
+                </div>
+                <div class="plays-badge">{{ t.plays }} plays</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Always completed + Most skipped -->
+        <div class="two-col">
+            <div>
+                <h2>💚 ALWAYS COMPLETED</h2>
+                {% if always_completed %}
+                    {% for t in always_completed %}
+                    <div class="track-item">
+                        {% if t.art %}
+                        <img src="{{ t.art }}" alt="art">
+                        {% else %}
+                        <div class="img-placeholder"></div>
+                        {% endif %}
+                        <div class="info">
+                            <div class="name">{{ t.name }}</div>
+                            <div class="sub">{{ t.plays }} plays · 0 skips</div>
+                        </div>
+                        <span class="played-badge">✓</span>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p style="color:#555; font-size:0.75rem; letter-spacing:2px; padding:20px 0;">— NOT ENOUGH DATA —</p>
+                {% endif %}
+            </div>
+            <div>
+                <h2>⏭ MOST SKIPPED</h2>
+                {% if most_skipped_tracks %}
+                    {% for t in most_skipped_tracks %}
+                    <div class="track-item">
+                        {% if t.art %}
+                        <img src="{{ t.art }}" alt="art">
+                        {% else %}
+                        <div class="img-placeholder"></div>
+                        {% endif %}
+                        <div class="info">
+                            <div class="name">{{ t.name }}</div>
+                            <div class="sub">{{ t.skips }}/{{ t.plays }} skipped</div>
+                        </div>
+                        <span class="skipped-badge">{{ t.skip_rate }}%</span>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p style="color:#555; font-size:0.75rem; letter-spacing:2px; padding:20px 0;">— NO SKIPS —</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Mood breakdown -->
+        {% if mood_breakdown %}
+        <div class="section">
+            <h2>🎵 MOOD BREAKDOWN</h2>
+            <div class="mood-grid">
+                {% for mood, count in mood_breakdown.items() %}
+                <div class="mood-card">
+                    <div class="mc-mood">{{ mood }}</div>
+                    <div class="mc-count">{{ count }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Co-listened artists -->
+        {% if top_co_artists %}
+        <div class="section">
+            <h2>🔗 OFTEN LISTENED WITH</h2>
+            <div class="co-artist-grid">
+                {% for artist in top_co_artists %}
+                <a href="/artist/{{ artist.name | urlencode }}" class="co-artist-card">
+                    <span class="ca-name">{{ artist.name }}</span>
+                    <span class="ca-count">{{ artist.count }}×</span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% endif %}
+    </div>
+
+    {% if found and monthly_labels %}
+    <script>
+        new Chart(document.getElementById('trendChart'), {
+            type: 'bar',
+            data: {
+                labels: {{ monthly_labels | tojson }},
+                datasets: [{
+                    label: 'Plays',
+                    data: {{ monthly_values | tojson }},
+                    backgroundColor: '#ff00ff44',
+                    borderColor: '#ff00ff',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#111',
+                        borderColor: '#ff00ff',
+                        borderWidth: 1,
+                        titleColor: '#00ffff',
+                        bodyColor: '#fff',
+                        titleFont: { family: 'Share Tech Mono' },
+                        bodyFont:  { family: 'Share Tech Mono' },
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 8 }, maxRotation: 45 }, grid: { color: '#ffffff0a' } },
+                    y: { ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } }
+                }
+            }
+        });
+    </script>
+    {% endif %}
+</body>
+</html>

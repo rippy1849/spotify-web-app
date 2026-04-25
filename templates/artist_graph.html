@@ -102,6 +102,7 @@
             margin-top: 4px;
         }
 
+        /* ── Tooltip ── */
         .tooltip {
             position: fixed;
             background: rgba(0,0,0,0.92);
@@ -169,6 +170,7 @@
 
         .node-tooltip .nt-plays { color: #ff00aa; font-size: 0.65rem; }
 
+        /* ── Search box — always visible ── */
         .search-box {
             position: fixed;
             top: 20px;
@@ -176,11 +178,8 @@
             transform: translateX(-50%);
             z-index: 20;
             width: 280px;
-            opacity: 0;
-            transition: opacity 0.3s;
+            opacity: 1;
         }
-
-        .search-box.visible { opacity: 1; }
 
         .search-box input {
             width: 100%;
@@ -224,7 +223,9 @@
         }
 
         .search-result-item:hover { background: #ff00ff22; color: #ff00ff; }
+        .search-result-item:visited { color: #ccc; }
 
+        /* ── Controls ── */
         .controls {
             position: fixed;
             bottom: 24px;
@@ -253,6 +254,12 @@
         }
 
         .ctrl-btn:hover {
+            border-color: #ff00ff;
+            color: #ff00ff;
+            background: rgba(255,0,255,0.1);
+        }
+
+        .ctrl-btn.active {
             border-color: #ff00ff;
             color: #ff00ff;
             background: rgba(255,0,255,0.1);
@@ -337,6 +344,7 @@
         <div class="nt-plays" id="nt-plays"></div>
     </div>
 
+    <!-- Search box — always visible -->
     <div class="search-box" id="searchBox">
         <input type="text" id="artistSearch" placeholder="SEARCH ARTIST..." autocomplete="off">
         <div class="search-results" id="searchResults"></div>
@@ -349,8 +357,8 @@
     </div>
 
     <div class="controls" id="controls">
-        <button class="ctrl-btn" id="btnReset">↺ RESET VIEW</button>
-        <button class="ctrl-btn" id="btnFreeze">❄ FREEZE</button>
+        <button class="ctrl-btn active" id="btnReset">↺ RESET VIEW</button>
+        <button class="ctrl-btn active" id="btnFreeze">❄ FREEZE</button>
         <button class="ctrl-btn" id="btnCharge">⚡ SPREAD</button>
     </div>
 
@@ -360,9 +368,9 @@
         const tooltip   = document.getElementById('tooltip');
         const nodeTip   = document.getElementById('nodeTooltip');
 
-        // ── Mouse idle ────────────────────────────────────────────────────────
+        // ── Mouse idle — search box stays visible always ───────────────────
         let mouseTimer = null;
-        const uiEls    = ['nav','titleBox','statsBar','controls','searchBox'].map(id => document.getElementById(id));
+        const uiEls    = ['nav','titleBox','statsBar','controls'].map(id => document.getElementById(id));
 
         document.addEventListener('mousemove', () => {
             uiEls.forEach(el => el.classList.add('visible'));
@@ -467,14 +475,10 @@
             })
             .on('mouseleave', () => { tooltip.style.display = 'none'; })
             .on('mouseover', function(event, d) {
-                d3.select(this)
-                    .attr('stroke-opacity', 1)
-                    .attr('stroke-width', linkWidth(d) + 2);
+                d3.select(this).attr('stroke-opacity', 1).attr('stroke-width', linkWidth(d) + 2);
             })
             .on('mouseout', function(event, d) {
-                d3.select(this)
-                    .attr('stroke-opacity', 0.5)
-                    .attr('stroke-width', linkWidth(d));
+                d3.select(this).attr('stroke-opacity', 0.5).attr('stroke-width', linkWidth(d));
             });
 
         // ── Nodes ─────────────────────────────────────────────────────────────
@@ -489,7 +493,7 @@
                 .on('end',   dragEnd)
             );
 
-        // Glow ring — dimmer for solo artists
+        // Glow ring
         node.append('circle')
             .attr('r',                d => nodeRadius(d) + 5)
             .attr('fill',             'none')
@@ -612,7 +616,6 @@
         let spread = false;
         document.getElementById('btnCharge').addEventListener('click', () => {
             spread = !spread;
-
             if (spread) {
                 simulation.force('link').distance(280).strength(0.3);
                 simulation.force('charge').strength(-600).distanceMax(600);
@@ -624,7 +627,6 @@
                 simulation.force('collision').radius(d => nodeRadius(d) + 15);
                 document.getElementById('btnCharge').textContent = '⚡ SPREAD';
             }
-
             simulation.alpha(0.3).alphaTarget(0).restart();
         });
 
@@ -661,6 +663,7 @@
                 item.addEventListener('click', () => {
                     searchInput.value           = name;
                     searchResults.style.display = 'none';
+                    clearHighlight();
                     focusArtist(name);
                 });
                 searchResults.appendChild(item);
@@ -679,6 +682,7 @@
                            || artistNames.find(n => n.toLowerCase().includes(q));
                 if (match) {
                     searchResults.style.display = 'none';
+                    clearHighlight();
                     focusArtist(match);
                 }
             }
@@ -691,49 +695,70 @@
         });
 
         function focusArtist(name) {
-            const target = graphData.nodes.find(n => n.id === name);
-            if (!target) return;
+    const target = graphData.nodes.find(n => n.id === name);
+    if (!target) return;
 
-            clearHighlight();
-            highlightedNode = name;
+    clearHighlight();
+    highlightedNode = name;
 
-            node.each(function(d) {
-                const el = d3.select(this);
-                if (d.id === name) {
-                    el.selectAll('circle')
-                        .attr('stroke-width', 4)
-                        .attr('opacity',      1);
-                    el.selectAll('text')
-                        .attr('fill',      '#ffff00')
-                        .attr('font-size', 13);
-                } else {
-                    el.attr('opacity', 0.25);
-                }
-            });
-
-            link.attr('opacity', d =>
-                (d.source.id === name || d.target.id === name) ? 1 : 0.05
-            );
-
-            if (target.x && target.y) {
-                const scale = 1.8;
-                const tx    = W / 2 - target.x * scale;
-                const ty    = H / 2 - target.y * scale;
-                svg.transition().duration(600).call(
-                    zoom.transform,
-                    d3.zoomIdentity.translate(tx, ty).scale(scale)
-                );
-            }
+    node.each(function(d) {
+        const el = d3.select(this);
+        if (d.id === name) {
+            el.attr('opacity', 1);
+            el.select('circle:first-child')
+                .attr('stroke-width', 4)
+                .attr('opacity', 1);
+            el.selectAll('text')
+                .attr('fill',      '#ffff00')
+                .attr('font-size', 13);
+        } else {
+            el.attr('opacity', 0.25);
         }
+    });
+
+    link.attr('opacity', d =>
+        (d.source.id === name || d.target.id === name) ? 1 : 0.05
+    );
+
+    if (target.x && target.y) {
+        const scale = 1.8;
+        const tx    = W / 2 - target.x * scale;
+        const ty    = H / 2 - target.y * scale;
+        svg.transition().duration(600).call(
+            zoom.transform,
+            d3.zoomIdentity.translate(tx, ty).scale(scale)
+        );
+    }
+}
 
         function clearHighlight() {
-            highlightedNode = null;
-            node.attr('opacity', 1);
-            node.selectAll('text')
-                .attr('fill',      (d, i) => neon[i % neon.length])
-                .attr('font-size', 10);
-            link.attr('opacity', 1);
-        }
+    highlightedNode = null;
+
+    // Reset node group opacity
+    node.attr('opacity', 1);
+
+    // Reset all circles inside each node
+    node.selectAll('circle')
+        .attr('stroke-width', function(d, i) {
+            // Restore original stroke width based on circle type
+            // First circle is glow ring, second is image/fallback
+            return null;
+        })
+        .attr('opacity', null);
+
+    // Reset text
+    node.selectAll('text')
+        .attr('fill',      (d, i) => neon[i % neon.length])
+        .attr('font-size', 10);
+
+    // Reset links
+    link.attr('opacity', 1);
+
+    // Re-apply original glow ring styles
+    node.select('circle:first-child')
+        .attr('stroke-width', d => d.connected ? 1.5 : 0.8)
+        .attr('opacity',      d => d.connected ? 0.5 : 0.2);
+}
 
         svg.on('click', (event) => {
             if (event.target === svg.node()) {

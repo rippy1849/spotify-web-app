@@ -18,6 +18,7 @@
         .nav a { color: #ff00aa; text-decoration: none; font-size: 0.75rem; letter-spacing: 2px; text-shadow: 0 0 8px #ff00aa; }
         .nav a:hover { color: #fff; }
         h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 4px; color: #ffff00; text-shadow: 0 0 10px #ffff0088; margin-bottom: 16px; border-bottom: 1px solid #ffff0033; padding-bottom: 8px; }
+
         .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 40px; }
         .stat-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff44; border-radius: 10px; padding: 20px; text-align: center; }
         .stat-value { font-family: 'Orbitron', sans-serif; font-size: 1.6rem; font-weight: 900; color: #00ffff; text-shadow: 0 0 16px #00ffff; }
@@ -32,48 +33,23 @@
             overflow-x: auto;
         }
 
-        .calendar-grid {
-            display: grid;
-            grid-template-rows: repeat(7, 14px);
-            grid-auto-flow: column;
-            gap: 3px;
-            width: max-content;
-        }
-
         .cal-cell {
             width: 14px;
             height: 14px;
             border-radius: 2px;
-            cursor: pointer;
             transition: transform 0.1s;
             position: relative;
         }
 
         .cal-cell:hover { transform: scale(1.4); z-index: 10; }
-
-        .cal-cell.empty { background: transparent; cursor: default; }
-
-        .month-labels {
-            display: flex;
-            gap: 0;
-            margin-bottom: 6px;
-            width: max-content;
-            padding-left: 20px;
-        }
-
-        .month-label {
-            font-size: 0.65rem;
-            color: #ff00aa;
-            letter-spacing: 1px;
-            min-width: 52px;
-        }
+        .cal-cell.empty { background: transparent !important; cursor: default !important; }
 
         .dow-labels {
             display: grid;
             grid-template-rows: repeat(7, 14px);
             gap: 3px;
-            float: left;
-            margin-right: 6px;
+            width: 30px;
+            flex-shrink: 0;
             margin-top: 2px;
         }
 
@@ -110,12 +86,17 @@
             margin-top: 16px;
             font-size: 0.7rem;
             color: #555;
+            flex-wrap: wrap;
         }
 
         .legend-cell {
             width: 14px;
             height: 14px;
             border-radius: 2px;
+        }
+
+        @media (max-width: 700px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 </head>
@@ -155,44 +136,53 @@
         <div class="section">
             <h2>📅 LISTENING HEATMAP</h2>
             <div class="calendar-wrap">
-                <div class="month-labels" id="monthLabels"></div>
-                <div style="display:flex;">
-                    <div class="dow-labels">
-                        <div class="dow-label">MON</div>
-                        <div class="dow-label"></div>
-                        <div class="dow-label">WED</div>
-                        <div class="dow-label"></div>
-                        <div class="dow-label">FRI</div>
-                        <div class="dow-label"></div>
-                        <div class="dow-label">SUN</div>
+                <div id="calendarInner" style="display:inline-block;">
+                    <div id="monthLabels"></div>
+                    <div style="display:flex; gap:6px;">
+                        <div class="dow-labels">
+                            <div class="dow-label">MON</div>
+                            <div class="dow-label"></div>
+                            <div class="dow-label">WED</div>
+                            <div class="dow-label"></div>
+                            <div class="dow-label">FRI</div>
+                            <div class="dow-label"></div>
+                            <div class="dow-label">SUN</div>
+                        </div>
+                        <div id="calGrid"></div>
                     </div>
-                    <div class="calendar-grid" id="calGrid"></div>
                 </div>
                 <div class="legend">
                     <span>LESS</span>
                     <div class="legend-cell" style="background:#ffffff11;"></div>
-                    <div class="legend-cell" style="background:#ff00ff44;"></div>
-                    <div class="legend-cell" style="background:#ff00ff88;"></div>
-                    <div class="legend-cell" style="background:#ff00ffcc;"></div>
+                    <div class="legend-cell" style="background:#ff00ff33;"></div>
+                    <div class="legend-cell" style="background:#ff00ff66;"></div>
+                    <div class="legend-cell" style="background:#ff00ffaa;"></div>
                     <div class="legend-cell" style="background:#ff00ff;"></div>
                     <span>MORE</span>
+                    <span style="margin-left:16px; color:#00ffff; font-size:0.65rem;">CLICK A DAY TO TIME TRAVEL ↗</span>
                 </div>
             </div>
         </div>
     </div>
 
     <div class="tooltip" id="tooltip">
-        <div class="t-date" id="tt-date"></div>
+        <div class="t-date"  id="tt-date"></div>
         <div class="t-plays" id="tt-plays"></div>
-        <div class="t-mins" id="tt-mins"></div>
+        <div class="t-mins"  id="tt-mins"></div>
         <div class="t-skips" id="tt-skips"></div>
     </div>
 
     <script>
-        const dates   = {{ all_dates | tojson }};
+        const dates    = {{ all_dates | tojson }};
         const maxPlays = {{ max_plays }};
-        const grid     = document.getElementById('calGrid');
         const tooltip  = document.getElementById('tooltip');
+
+        const CELL_SIZE  = 14;
+        const CELL_GAP   = 3;
+        const CELL_STEP  = CELL_SIZE + CELL_GAP; // 17px per column
+        const DOW_WIDTH  = 30;
+        const FLEX_GAP   = 6;
+        const DOW_OFFSET = DOW_WIDTH + FLEX_GAP; // 36px total left offset
 
         function getColor(plays) {
             if (plays === 0) return '#ffffff08';
@@ -203,30 +193,84 @@
             return '#ff00ff';
         }
 
-        // Find the day of week of the first date to pad the grid
+        // Find the day of week of the first date — Mon=0
         const firstDate = new Date(dates[0].date + 'T00:00:00');
-        let   startDow  = firstDate.getDay(); // 0=Sun
-        // Convert to Mon=0
-        startDow = (startDow + 6) % 7;
+        let   startDow  = firstDate.getDay();
+        startDow        = (startDow + 6) % 7;
 
-        // Add empty cells for padding
+        const totalCols = Math.ceil((dates.length + startDow) / 7);
+
+        // ── Build month labels ─────────────────────────────────────────────
+        const monthColMap = {};
+        dates.forEach((d, idx) => {
+            const col = Math.floor((idx + startDow) / 7);
+            if (d.day === 1 || idx === 0) {
+                if (!monthColMap[d.month]) {
+                    monthColMap[d.month] = col;
+                }
+            }
+        });
+
+        const monthLabelsEl = document.getElementById('monthLabels');
+        monthLabelsEl.innerHTML = '';
+
+        const labelRow = document.createElement('div');
+        labelRow.style.cssText = `
+            position: relative;
+            height: 18px;
+            width: ${DOW_OFFSET + totalCols * CELL_STEP}px;
+            margin-bottom: 4px;
+        `;
+
+        Object.entries(monthColMap).forEach(([month, col]) => {
+            const label = document.createElement('span');
+            label.textContent = month;
+            label.style.cssText = `
+                position: absolute;
+                left: ${DOW_OFFSET + col * CELL_STEP}px;
+                top: 0;
+                font-size: 0.65rem;
+                color: #ff00aa;
+                letter-spacing: 1px;
+                white-space: nowrap;
+                font-family: 'Share Tech Mono', monospace;
+            `;
+            labelRow.appendChild(label);
+        });
+
+        monthLabelsEl.appendChild(labelRow);
+
+        // ── Build calendar grid ────────────────────────────────────────────
+        const grid = document.getElementById('calGrid');
+        grid.innerHTML = '';
+        grid.style.cssText = `
+            display: grid;
+            grid-template-rows: repeat(7, ${CELL_SIZE}px);
+            grid-auto-flow: column;
+            gap: ${CELL_GAP}px;
+            width: max-content;
+        `;
+
+        // Empty padding cells
         for (let i = 0; i < startDow; i++) {
             const empty = document.createElement('div');
             empty.className = 'cal-cell empty';
             grid.appendChild(empty);
         }
 
-        // Track month label positions
-        const monthPositions = {};
-
-        dates.forEach((d, idx) => {
+        // Date cells
+        dates.forEach((d) => {
             const cell = document.createElement('div');
-            cell.className = 'cal-cell';
+            cell.className        = 'cal-cell';
             cell.style.background = getColor(d.plays);
 
-            // Glow for high play days
-            if (d.plays > maxPlays * 0.7) {
-                cell.style.boxShadow = `0 0 6px #ff00ff`;
+            if (d.plays > 0) {
+                cell.style.cursor = 'pointer';
+                if (d.plays > maxPlays * 0.7) {
+                    cell.style.boxShadow = '0 0 6px #ff00ff';
+                }
+            } else {
+                cell.style.cursor = 'default';
             }
 
             cell.addEventListener('mousemove', (e) => {
@@ -243,25 +287,14 @@
                 tooltip.style.display = 'none';
             });
 
+            cell.addEventListener('click', () => {
+                if (d.plays > 0) {
+                    window.location.href = `/time-machine/${d.date}`;
+                }
+            });
+
             grid.appendChild(cell);
-
-            // Track month positions for labels
-            if (d.day === 1 || idx === 0) {
-                const col = Math.floor((idx + startDow) / 7);
-                monthPositions[col] = d.month;
-            }
         });
-
-        // Build month labels
-        const monthLabels = document.getElementById('monthLabels');
-        const totalCols   = Math.ceil((dates.length + startDow) / 7);
-        for (let col = 0; col < totalCols; col++) {
-            const label = document.createElement('div');
-            label.className = 'month-label';
-            label.style.width = '17px';
-            label.textContent = monthPositions[col] || '';
-            monthLabels.appendChild(label);
-        }
     </script>
 </body>
 </html>

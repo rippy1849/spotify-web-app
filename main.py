@@ -16,7 +16,7 @@ from sqlalchemy import func, select, case
 from collections import defaultdict, Counter, namedtuple
 
 from database import init_db, AsyncSessionLocal
-from models import TrackPlay, ArtistCache
+from models import TrackPlay, ArtistCache, ArtistSpotifyID
 from tracker import (
     current_track_state, update_state, is_new_track,
     commit_previous_track, get_or_fetch_genre, was_skipped,
@@ -63,6 +63,7 @@ async def refresh_access_token():
 
 
 async def poll_spotify(app):
+    """Background task that polls Spotify every 5 seconds and logs track changes."""
     print(f"[POLLER] Instance started — PID: {os.getpid()}")
     await asyncio.sleep(5)
     while True:
@@ -102,6 +103,7 @@ async def poll_spotify(app):
                         if is_new_track(track):
                             print(f"[POLLER] NEW TRACK — committing: {current_track_state.get('track_name')}")
 
+                            # Commit previous track first
                             try:
                                 async with AsyncSessionLocal() as db:
                                     await commit_previous_track(db)
@@ -113,9 +115,31 @@ async def poll_spotify(app):
                             except Exception as e:
                                 print(f"[POLLER] Commit error: {e}")
 
+                            # Update state to new track
                             update_state(track)
                             print(f"[POLLER] State updated to: {track['track_name']}")
 
+                            # Store Spotify IDs for ALL artists in track
+                            try:
+                                async with AsyncSessionLocal() as db:
+                                    all_track_artist_ids = {
+                                        a["name"]: a["id"] for a in item["artists"]
+                                    }
+                                    for aname, aid in all_track_artist_ids.items():
+                                        existing_q = select(ArtistSpotifyID).where(
+                                            ArtistSpotifyID.artist_name == aname
+                                        )
+                                        existing = (await db.execute(existing_q)).scalar_one_or_none()
+                                        if not existing:
+                                            db.add(ArtistSpotifyID(
+                                                artist_name = aname,
+                                                spotify_id  = aid,
+                                            ))
+                                    await db.commit()
+                            except Exception as e:
+                                print(f"[POLLER] Artist ID store error: {e}")
+
+                            # Fetch and store genre for new track
                             if artist_id:
                                 try:
                                     async with AsyncSessionLocal() as db:
@@ -138,6 +162,8 @@ async def poll_spotify(app):
             print(f"[POLLER] Error: {e}")
 
         await asyncio.sleep(5)
+
+
 
 
 @asynccontextmanager
@@ -1373,6 +1399,9 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
     if "access_token" not in token_store:
         return RedirectResponse("/")
 
+    from datetime import timedelta
+    from itertools import combinations
+
     # Get ALL tracks
     all_plays_q = (
         select(TrackPlay.track_name, TrackPlay.artists, TrackPlay.album_art_url)
@@ -1380,7 +1409,6 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
     )
     all_plays = (await db.execute(all_plays_q)).fetchall()
 
-    from itertools import combinations
     connections  = defaultdict(lambda: {"count": 0, "tracks": set()})
     artist_plays = Counter()
 
@@ -1413,8 +1441,16 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
             "link_count": 0,
         })
 
-    # Build map of primary artist name -> spotify ID from track history
-    artist_id_map  = {}
+    # Build map of artist name -> spotify ID
+    # First try the dedicated ArtistSpotifyID table
+    artist_id_map = {}
+
+    id_table_q    = select(ArtistSpotifyID)
+    id_table_rows = (await db.execute(id_table_q)).fetchall()
+    for row in id_table_rows:
+        artist_id_map[row[0].artist_name] = row[0].spotify_id
+
+    # Fall back to track history for any still missing
     artist_id_q    = (
         select(TrackPlay.artists, TrackPlay.artist_spotify_id)
         .where(TrackPlay.artist_spotify_id != None)
@@ -1427,26 +1463,31 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
             if primary not in artist_id_map:
                 artist_id_map[primary] = row.artist_spotify_id
 
+    print(f"[GRAPH] Artist ID map has {len(artist_id_map)} entries")
+
     # Fetch artist images concurrently with caching
     artist_images = {}
 
     async def fetch_artist_image(artist_name: str):
-        # Check cache first
+        # Check cache — only use if fetched within last 7 days and has a valid URL
         async with AsyncSessionLocal() as cache_db:
             cache_q = select(ArtistCache).where(
                 ArtistCache.artist_name == artist_name,
                 ArtistCache.track_name  == None,
                 ArtistCache.image_url   != None,
+                ArtistCache.fetched_at  >= datetime.now(TIMEZONE) - timedelta(days=7),
             ).limit(1)
             cached = (await cache_db.execute(cache_q)).scalar_one_or_none()
             if cached and cached.image_url:
                 artist_images[artist_name] = cached.image_url
                 return
 
-        async def save_image_to_cache(artist_name: str, image_url: str):
+        async def save_image_to_cache(name: str, image_url: str):
+            if not image_url:
+                return
             async with AsyncSessionLocal() as cache_db:
                 existing_q = select(ArtistCache).where(
-                    ArtistCache.artist_name == artist_name,
+                    ArtistCache.artist_name == name,
                     ArtistCache.track_name  == None,
                 ).limit(1)
                 existing = (await cache_db.execute(existing_q)).scalar_one_or_none()
@@ -1455,7 +1496,7 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
                     await cache_db.commit()
                 else:
                     entry = ArtistCache(
-                        artist_name = artist_name,
+                        artist_name = name,
                         track_name  = None,
                         image_url   = image_url,
                     )
@@ -1479,6 +1520,9 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
                     artist_images[artist_name] = image_url
                     await save_image_to_cache(artist_name, image_url)
                     return
+                elif resp.status_code == 429:
+                    artist_images[artist_name] = None
+                    return
 
             # No stored ID — fall back to strict exact name search only
             encoded = urllib.parse.quote(artist_name)
@@ -1487,12 +1531,16 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
                     f"https://api.spotify.com/v1/search?q={encoded}&type=artist&limit=5",
                     headers={"Authorization": f"Bearer {token_store['access_token']}"},
                 )
+
+            if resp.status_code == 429:
+                artist_images[artist_name] = None
+                return
+
             if resp.status_code == 200:
                 items        = resp.json().get("artists", {}).get("items", [])
                 artist_lower = artist_name.lower().strip()
                 matched      = None
 
-                # Exact match only — no partial matching to avoid wrong photos
                 for item in items:
                     if item["name"].lower().strip() == artist_lower:
                         matched = item
@@ -1503,18 +1551,34 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
                     image_url = images[-1]["url"] if images else None
                     artist_images[artist_name] = image_url
                     await save_image_to_cache(artist_name, image_url)
+                    # Also store the Spotify ID for future use
+                    try:
+                        async with AsyncSessionLocal() as id_db:
+                            existing_q = select(ArtistSpotifyID).where(
+                                ArtistSpotifyID.artist_name == artist_name
+                            )
+                            existing = (await id_db.execute(existing_q)).scalar_one_or_none()
+                            if not existing:
+                                id_db.add(ArtistSpotifyID(
+                                    artist_name = artist_name,
+                                    spotify_id  = matched["id"],
+                                ))
+                                await id_db.commit()
+                    except Exception:
+                        pass
                 else:
                     artist_images[artist_name] = None
 
         except Exception:
             artist_images[artist_name] = None
 
-    # Run concurrently in batches of 10
+    # Run concurrently in batches of 5 with delay to avoid rate limiting
     artist_list = list(all_artists)[:80]
-    batch_size  = 10
+    batch_size  = 5
     for i in range(0, len(artist_list), batch_size):
         batch = artist_list[i:i + batch_size]
         await asyncio.gather(*[fetch_artist_image(a) for a in batch])
+        await asyncio.sleep(0.3)
 
     # Build nodes
     connected_artists = set()
@@ -1550,6 +1614,8 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
         "node_count": len(nodes),
         "link_count": len(links),
     })
+
+
 
 @app.get("/rave", response_class=HTMLResponse)
 async def concert(request: Request, db: AsyncSession = Depends(get_db)):
@@ -1641,3 +1707,383 @@ async def mosaic(request: Request, db: AsyncSession = Depends(get_db)):
         "album_list": json.dumps(album_list),
         "count":      len(album_list),
     })
+
+@app.get("/time-machine", response_class=HTMLResponse)
+async def time_machine(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    # Get all available dates
+    dates_q = (
+        select(func.strftime('%Y-%m-%d', TrackPlay.listened_at).label("day"))
+        .group_by(func.strftime('%Y-%m-%d', TrackPlay.listened_at))
+        .order_by(func.strftime('%Y-%m-%d', TrackPlay.listened_at).desc())
+    )
+    available_dates = [r.day for r in (await db.execute(dates_q)).fetchall()]
+
+    return templates.TemplateResponse("time_machine.html", {
+        "request":         request,
+        "available_dates": available_dates,
+        "selected_date":   None,
+        "plays":           [],
+        "stats":           None,
+    })
+
+
+@app.get("/time-machine/{date}", response_class=HTMLResponse)
+async def time_machine_date(request: Request, date: str, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    # Get all available dates for the picker
+    dates_q = (
+        select(func.strftime('%Y-%m-%d', TrackPlay.listened_at).label("day"))
+        .group_by(func.strftime('%Y-%m-%d', TrackPlay.listened_at))
+        .order_by(func.strftime('%Y-%m-%d', TrackPlay.listened_at).desc())
+    )
+    available_dates = [r.day for r in (await db.execute(dates_q)).fetchall()]
+
+    # Get plays for selected date
+    plays_q = (
+        select(TrackPlay)
+        .where(func.strftime('%Y-%m-%d', TrackPlay.listened_at) == date)
+        .order_by(TrackPlay.listened_at.asc())
+    )
+    plays = (await db.execute(plays_q)).scalars().fetchall()
+
+    stats = None
+    if plays:
+        total         = len(plays)
+        skips         = sum(1 for p in plays if p.was_skipped)
+        minutes       = round(sum(p.progress_ms for p in plays) / 60000, 1)
+        skip_rate     = round(skips / total * 100, 1) if total else 0
+
+        # Top artist
+        artist_counter = Counter()
+        for p in plays:
+            if p.artists:
+                for a in p.artists.split(","):
+                    a = a.strip()
+                    if a:
+                        artist_counter[a] += 1
+        top_artist = artist_counter.most_common(1)[0] if artist_counter else None
+
+        # Top track
+        track_counter = Counter(p.track_name for p in plays)
+        top_track     = track_counter.most_common(1)[0] if track_counter else None
+
+        # Dominant mood
+        mood_counter  = Counter(p.auto_mood for p in plays if p.auto_mood and p.auto_mood != "UNKNOWN")
+        dominant_mood = mood_counter.most_common(1)[0][0] if mood_counter else "UNKNOWN"
+
+        # Top genre
+        genre_counter = Counter()
+        for p in plays:
+            if p.primary_genre:
+                for g in p.primary_genre.split(","):
+                    g = g.strip().lower()
+                    if g:
+                        genre_counter[g] += 1
+        top_genre = genre_counter.most_common(1)[0][0] if genre_counter else None
+
+        # Peak hour
+        hour_counter = Counter(p.hour_of_day for p in plays if p.hour_of_day is not None)
+        peak_hour    = hour_counter.most_common(1)[0] if hour_counter else None
+
+        # First and last track
+        first_track = plays[0]
+        last_track  = plays[-1]
+
+        # Unique artists and tracks
+        unique_tracks  = len(set(p.track_id for p in plays))
+        unique_artists = len(set(
+            a.strip()
+            for p in plays if p.artists
+            for a in p.artists.split(",")
+            if a.strip()
+        ))
+
+        # Compare to average day
+        avg_plays_q = (
+            select(func.count().label("cnt"))
+            .select_from(TrackPlay)
+            .group_by(func.strftime('%Y-%m-%d', TrackPlay.listened_at))
+        )
+        all_day_counts = [r.cnt for r in (await db.execute(avg_plays_q)).fetchall()]
+        avg_plays      = round(sum(all_day_counts) / len(all_day_counts), 1) if all_day_counts else 0
+        vs_average     = round(((total - avg_plays) / avg_plays * 100), 1) if avg_plays else 0
+
+        stats = {
+            "total":         total,
+            "skips":         skips,
+            "skip_rate":     skip_rate,
+            "minutes":       minutes,
+            "top_artist":    top_artist,
+            "top_track":     top_track,
+            "dominant_mood": dominant_mood,
+            "top_genre":     top_genre,
+            "peak_hour":     peak_hour,
+            "first_track":   first_track,
+            "last_track":    last_track,
+            "unique_tracks":  unique_tracks,
+            "unique_artists": unique_artists,
+            "avg_plays":     avg_plays,
+            "vs_average":    vs_average,
+        }
+
+    return templates.TemplateResponse("time_machine.html", {
+        "request":         request,
+        "available_dates": available_dates,
+        "selected_date":   date,
+        "plays":           plays,
+        "stats":           stats,
+    })
+
+
+
+@app.get("/artist/{artist_name}", response_class=HTMLResponse)
+async def artist_deep_dive(request: Request, artist_name: str, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    import urllib.parse
+    artist_name = urllib.parse.unquote(artist_name)
+
+    # Get all plays featuring this artist
+    plays_q = (
+        select(TrackPlay)
+        .where(TrackPlay.artists.ilike(f"%{artist_name}%"))
+        .order_by(TrackPlay.listened_at.asc())
+    )
+    plays = (await db.execute(plays_q)).scalars().fetchall()
+
+    if not plays:
+        return templates.TemplateResponse("artist_dive.html", {
+            "request":     request,
+            "artist_name": artist_name,
+            "found":       False,
+        })
+
+    total      = len(plays)
+    skips      = sum(1 for p in plays if p.was_skipped)
+    skip_rate  = round(skips / total * 100, 1) if total else 0
+    minutes    = round(sum(p.progress_ms for p in plays) / 60000, 1)
+    completion = round((total - skips) / total * 100, 1) if total else 0
+
+    # First and most recent play
+    first_play  = plays[0]
+    latest_play = plays[-1]
+
+    # Streak
+    days_with_plays = sorted(set(p.listened_at.date() for p in plays))
+    max_streak = temp_streak = 1
+    for i in range(1, len(days_with_plays)):
+        if (days_with_plays[i] - days_with_plays[i-1]).days == 1:
+            temp_streak += 1
+            max_streak   = max(max_streak, temp_streak)
+        else:
+            temp_streak = 1
+
+    # Peak hour
+    hour_counter = Counter(p.hour_of_day for p in plays if p.hour_of_day is not None)
+    peak_hour    = hour_counter.most_common(1)[0][0] if hour_counter else None
+
+    # Peak day
+    dow_counter = Counter(p.day_of_week for p in plays if p.day_of_week)
+    peak_dow    = dow_counter.most_common(1)[0][0] if dow_counter else None
+
+    # Mood breakdown
+    mood_counter  = Counter(p.auto_mood for p in plays if p.auto_mood and p.auto_mood != "UNKNOWN")
+    dominant_mood = mood_counter.most_common(1)[0][0] if mood_counter else "UNKNOWN"
+    mood_breakdown = dict(mood_counter.most_common(8))
+
+    # Genre
+    genre_counter = Counter()
+    for p in plays:
+        if p.primary_genre:
+            for g in p.primary_genre.split(","):
+                g = g.strip().lower()
+                if g:
+                    genre_counter[g] += 1
+    top_genres = [g for g, _ in genre_counter.most_common(5)]
+
+    # Track breakdown
+    track_plays  = Counter()
+    track_skips  = Counter()
+    track_art    = {}
+    track_album  = {}
+    for p in plays:
+        track_plays[p.track_name]  += 1
+        track_art[p.track_name]     = p.album_art_url
+        track_album[p.track_name]   = p.album
+        if p.was_skipped:
+            track_skips[p.track_name] += 1
+
+    # Most played tracks
+    most_played_tracks = []
+    for track, count in track_plays.most_common(10):
+        skip_count = track_skips.get(track, 0)
+        most_played_tracks.append({
+            "name":      track,
+            "plays":     count,
+            "skips":     skip_count,
+            "skip_rate": round(skip_count / count * 100, 1) if count else 0,
+            "art":       track_art.get(track),
+            "album":     track_album.get(track),
+        })
+
+    # Always completed (0 skips, 3+ plays)
+    always_completed = [
+        {"name": t, "plays": track_plays[t], "art": track_art.get(t)}
+        for t in track_plays
+        if track_skips.get(t, 0) == 0 and track_plays[t] >= 3
+    ]
+    always_completed = sorted(always_completed, key=lambda x: x["plays"], reverse=True)[:5]
+
+    # Most skipped tracks
+    most_skipped_tracks = []
+    for track, skip_count in track_skips.most_common(5):
+        count = track_plays[track]
+        most_skipped_tracks.append({
+            "name":      track,
+            "plays":     count,
+            "skips":     skip_count,
+            "skip_rate": round(skip_count / count * 100, 1) if count else 0,
+            "art":       track_art.get(track),
+        })
+
+    # Co-listened artists — what artists appear around the same time
+    from datetime import timedelta
+    co_artists = Counter()
+    for p in plays:
+        window_start = p.listened_at - timedelta(minutes=30)
+        window_end   = p.listened_at + timedelta(minutes=30)
+        nearby_q     = (
+            select(TrackPlay.artists)
+            .where(TrackPlay.listened_at >= window_start)
+            .where(TrackPlay.listened_at <= window_end)
+            .where(TrackPlay.artists != p.artists)
+        )
+        nearby = (await db.execute(nearby_q)).fetchall()
+        for row in nearby:
+            if row.artists:
+                for a in row.artists.split(","):
+                    a = a.strip()
+                    if a and a.lower() != artist_name.lower():
+                        co_artists[a] += 1
+
+    top_co_artists = [{"name": a, "count": c} for a, c in co_artists.most_common(8)]
+
+    # Monthly play trend
+    monthly_plays = Counter()
+    for p in plays:
+        key = p.listened_at.strftime("%Y-%m")
+        monthly_plays[key] += 1
+
+    # Sort months chronologically
+    sorted_months  = sorted(monthly_plays.keys())
+    monthly_labels = sorted_months
+    monthly_values = [monthly_plays[m] for m in sorted_months]
+
+    # Get artist image from cache
+    artist_image = None
+    cache_q = select(ArtistCache).where(
+        ArtistCache.artist_name == artist_name,
+        ArtistCache.track_name  == None,
+        ArtistCache.image_url   != None,
+    ).limit(1)
+    cached = (await db.execute(cache_q)).scalar_one_or_none()
+    if cached:
+        artist_image = cached.image_url
+
+    # Unique albums
+    unique_albums = len(set(p.album for p in plays if p.album))
+
+    return templates.TemplateResponse("artist_dive.html", {
+        "request":           request,
+        "artist_name":       artist_name,
+        "found":             True,
+        "total":             total,
+        "skips":             skips,
+        "skip_rate":         skip_rate,
+        "minutes":           minutes,
+        "completion":        completion,
+        "first_play":        first_play,
+        "latest_play":       latest_play,
+        "max_streak":        max_streak,
+        "peak_hour":         peak_hour,
+        "peak_dow":          peak_dow,
+        "dominant_mood":     dominant_mood,
+        "mood_breakdown":    mood_breakdown,
+        "top_genres":        top_genres,
+        "most_played_tracks": most_played_tracks,
+        "always_completed":  always_completed,
+        "most_skipped_tracks": most_skipped_tracks,
+        "top_co_artists":    top_co_artists,
+        "monthly_labels":    monthly_labels,
+        "monthly_values":    monthly_values,
+        "artist_image":      artist_image,
+        "unique_albums":     unique_albums,
+    })
+
+@app.get("/artist-search", response_class=HTMLResponse)
+async def artist_search(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    all_artists_q   = select(TrackPlay.artists)
+    all_artist_rows = (await db.execute(all_artists_q)).fetchall()
+    artist_counter  = Counter()
+    for row in all_artist_rows:
+        if row.artists:
+            for a in row.artists.split(","):
+                a = a.strip()
+                if a:
+                    artist_counter[a] += 1
+
+    artists = sorted(
+        [{"name": a, "plays": c} for a, c in artist_counter.items()],
+        key=lambda x: x["plays"],
+        reverse=True
+    )
+
+    import json
+    return templates.TemplateResponse("artist_search.html", {
+        "request": request,
+        "artists": json.dumps(artists),
+        "count":   len(artists),
+    })
+
+
+@app.get("/debug-artist-ids")
+async def debug_artist_ids(db: AsyncSession = Depends(get_db)):
+    all_artists_q   = select(TrackPlay.artists)
+    all_artist_rows = (await db.execute(all_artists_q)).fetchall()
+    artist_counter  = Counter()
+    for row in all_artist_rows:
+        if row.artists:
+            for a in row.artists.split(","):
+                a = a.strip()
+                if a:
+                    artist_counter[a] += 1
+
+    artist_id_q    = (
+        select(TrackPlay.artists, TrackPlay.artist_spotify_id)
+        .where(TrackPlay.artist_spotify_id != None)
+        .group_by(TrackPlay.artists)
+    )
+    artist_id_rows = (await db.execute(artist_id_q)).fetchall()
+    artist_id_map  = {}
+    for row in artist_id_rows:
+        if row.artists:
+            primary = row.artists.split(",")[0].strip()
+            if primary not in artist_id_map:
+                artist_id_map[primary] = row.artist_spotify_id
+
+    missing = [a for a in artist_counter if a not in artist_id_map]
+    return {
+        "total_artists":   len(artist_counter),
+        "have_id":         len(artist_id_map),
+        "missing_id":      len(missing),
+        "missing_artists": sorted(missing),
+    }

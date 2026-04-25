@@ -32,15 +32,16 @@
         }
 
         /* ── Grid ── */
-        .mosaic-grid {
-            position: fixed;
-            inset: 0;
-            z-index: 2;
-            display: flex;
-            flex-wrap: wrap;
-            align-content: flex-start;
-            overflow: hidden;
-        }
+       .mosaic-grid {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    overflow-y: auto;  /* ← change from hidden to auto */
+    overflow-x: hidden;
+}
 
         .mosaic-cell {
             position: relative;
@@ -227,15 +228,20 @@
 
         /* ── Nav ── */
         .nav {
-            position: fixed;
-            top: 20px;
-            left: 24px;
-            z-index: 40;
-            display: flex;
-            gap: 20px;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
+    position: fixed;
+    top: 20px;
+    left: 24px;
+    z-index: 40;
+    display: flex;
+    gap: 20px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    background: rgba(0,0,0,0.75);
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid #ff00aa22;
+    backdrop-filter: blur(8px);
+}
 
         .nav.visible { opacity: 1; }
 
@@ -252,14 +258,19 @@
 
         /* ── Title ── */
         .title-box {
-            position: fixed;
-            top: 20px;
-            right: 24px;
-            z-index: 40;
-            text-align: right;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
+    position: fixed;
+    top: 20px;
+    right: 24px;
+    z-index: 40;
+    text-align: right;
+    opacity: 0;
+    transition: opacity 0.3s;
+    background: rgba(0,0,0,0.75);
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid #ff00ff22;
+    backdrop-filter: blur(8px);
+}
 
         .title-box.visible { opacity: 1; }
 
@@ -285,14 +296,14 @@
 
         /* ── Search ── */
         .search-wrap {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 40;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 40;
+    opacity: 1;  /* ← always visible */
+    transition: opacity 0.3s;
+}
 
         .search-wrap.visible { opacity: 1; }
 
@@ -390,7 +401,7 @@
 
         // ── Mouse idle ────────────────────────────────────────────────────────
         let mouseTimer = null;
-        const uiEls    = ['nav','titleBox','searchWrap'].map(id => document.getElementById(id));
+        const uiEls = ['nav','titleBox'].map(id => document.getElementById(id));
         document.addEventListener('mousemove', () => {
             uiEls.forEach(el => el.classList.add('visible'));
             clearTimeout(mouseTimer);
@@ -402,42 +413,105 @@
             (window.innerWidth * window.innerHeight) / albums.length
         ))));
 
-        function buildGrid(filtered) {
-            grid.innerHTML = '';
-            filtered.forEach((album, i) => {
-                const cell = document.createElement('div');
-                cell.className = 'mosaic-cell';
-                cell.style.width  = cellSize + 'px';
-                cell.style.height = cellSize + 'px';
+ function buildGrid(filtered) {
+    grid.innerHTML = '';
 
-                const intensity = album.plays / maxPlays;
-                if (intensity > 0.7)      cell.classList.add('hot');
-                else if (intensity > 0.3) cell.classList.add('warm');
+    if (filtered.length === 0) return;
 
-                const img     = document.createElement('img');
-                img.src       = album.art;
-                img.loading   = 'lazy';
-                img.alt       = album.album;
+    // Calculate perfect cell size to fill the screen
+    const screenW = window.innerWidth;
+    const screenH = window.innerHeight;
 
-                const overlay = document.createElement('div');
-                overlay.className = 'cell-overlay';
+    // Find the cell size that best fills the screen with no remainder
+    // Try different column counts and pick the one with least waste
+    let bestCellSize = 80;
+    let bestCols     = Math.floor(screenW / 80);
 
-                const info    = document.createElement('div');
-                info.className = 'cell-info';
-                info.innerHTML = `
-                    <div class="cell-title">${album.album}</div>
-                    <div class="cell-artist">${album.artists}</div>
-                    <div class="cell-plays">▶ ${album.plays} plays</div>
-                `;
+    for (let cols = 4; cols <= 30; cols++) {
+        const cellW = screenW / cols;
+        const rows  = Math.ceil(filtered.length / cols);
+        const cellH = cellW; // square cells
 
-                cell.appendChild(img);
-                cell.appendChild(overlay);
-                cell.appendChild(info);
-
-                cell.addEventListener('click', () => showDetail(album));
-                grid.appendChild(cell);
-            });
+        // Score — prefer cells that are reasonable size and fill width perfectly
+        if (cellW >= 60 && cellW <= 200) {
+            bestCellSize = Math.floor(cellW);
+            bestCols     = cols;
         }
+    }
+
+    // Pick cols that gives clean division of screen width
+    // Start from a reasonable number and find the best fit
+    const targetSize = Math.max(80, Math.min(160, Math.floor(screenW / 8)));
+    const cols       = Math.round(screenW / targetSize);
+    cellSize         = Math.floor(screenW / cols);
+
+    grid.style.display             = 'grid';
+    grid.style.gridTemplateColumns = `repeat(${cols}, ${cellSize}px)`;
+    grid.style.width               = '100%';
+
+    filtered.forEach((album, i) => {
+        const cell = document.createElement('div');
+        cell.style.cssText = `
+            position: relative;
+            width: ${cellSize}px;
+            height: ${cellSize}px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s;
+        `;
+
+        const intensity = album.plays / maxPlays;
+        if (intensity > 0.7)      cell.classList.add('hot');
+        else if (intensity > 0.3) cell.classList.add('warm');
+
+        const img     = document.createElement('img');
+        img.src       = album.art;
+        img.loading   = 'lazy';
+        img.alt       = album.album;
+        img.style.cssText = `
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            filter: brightness(0.7);
+            transition: filter 0.2s;
+        `;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'cell-overlay';
+
+        const info    = document.createElement('div');
+        info.className = 'cell-info';
+        info.innerHTML = `
+            <div class="cell-title">${album.album}</div>
+            <div class="cell-artist">${album.artists}</div>
+            <div class="cell-plays">▶ ${album.plays} plays</div>
+        `;
+
+        cell.appendChild(img);
+        cell.appendChild(overlay);
+        cell.appendChild(info);
+
+        cell.addEventListener('mouseenter', () => {
+            img.style.filter = 'brightness(1)';
+            overlay.style.opacity = '1';
+            info.style.opacity = '1';
+            cell.style.transform = 'scale(1.02)';
+            cell.style.zIndex = '10';
+        });
+
+        cell.addEventListener('mouseleave', () => {
+            img.style.filter = 'brightness(0.7)';
+            overlay.style.opacity = '0';
+            info.style.opacity = '0';
+            cell.style.transform = 'scale(1)';
+            cell.style.zIndex = '1';
+        });
+
+        cell.addEventListener('click', () => showDetail(album));
+        grid.appendChild(cell);
+    });
+}
 
         buildGrid(albums);
 
@@ -479,11 +553,15 @@
 
         // ── Resize ────────────────────────────────────────────────────────────
         window.addEventListener('resize', () => {
-            cellSize = Math.max(80, Math.min(160, Math.floor(Math.sqrt(
-                (window.innerWidth * window.innerHeight) / albums.length
-            ))));
-            buildGrid(albums);
-        });
+    buildGrid(
+        document.getElementById('mosaicSearch').value.trim()
+            ? albums.filter(a =>
+                a.album.toLowerCase().includes(document.getElementById('mosaicSearch').value.trim().toLowerCase()) ||
+                a.artists.toLowerCase().includes(document.getElementById('mosaicSearch').value.trim().toLowerCase())
+              )
+            : albums
+    );
+});
     </script>
 
     {% endif %}

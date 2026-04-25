@@ -82,7 +82,6 @@
             margin-bottom: 40px;
         }
 
-        /* ── Stat cards ── */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -114,10 +113,13 @@
             margin-top: 6px;
         }
 
-        /* ── Sections ── */
-        .section {
-            margin-bottom: 48px;
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
         }
+
+        .section { margin-bottom: 48px; }
 
         h2 {
             font-family: 'Orbitron', sans-serif;
@@ -130,14 +132,22 @@
             padding-bottom: 8px;
         }
 
-        /* ── Two column layout ── */
-        .two-col {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+        .nav {
+            display: flex;
             gap: 24px;
+            margin-bottom: 32px;
         }
 
-        /* ── Tables ── */
+        .nav a {
+            color: #ff00aa;
+            text-decoration: none;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            text-shadow: 0 0 8px #ff00aa;
+        }
+
+        .nav a:hover { color: #fff; }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -154,7 +164,7 @@
         }
 
         td {
-            padding: 7px 10px;
+            padding: 8px 10px;
             border-bottom: 1px solid #ffffff0a;
             color: #ccc;
         }
@@ -183,7 +193,6 @@
             letter-spacing: 2px;
         }
 
-        /* ── Charts ── */
         .chart-card {
             background: rgba(255,255,255,0.03);
             border: 1px solid #ff00ff22;
@@ -192,26 +201,16 @@
             box-shadow: 0 0 20px #ff00ff11;
         }
 
-        .chart-card canvas {
-            max-height: 260px;
-        }
+        .chart-card canvas { max-height: 260px; }
 
-        /* ── Nav ── */
-        .nav {
-            display: flex;
-            gap: 24px;
-            margin-bottom: 32px;
-        }
-
-        .nav a {
-            color: #ff00aa;
+        a.artist-link {
+            color: #00ffff;
             text-decoration: none;
-            font-size: 0.75rem;
-            letter-spacing: 2px;
-            text-shadow: 0 0 8px #ff00aa;
+            letter-spacing: 1px;
+            transition: color 0.2s;
         }
 
-        .nav a:hover { color: #fff; }
+        a.artist-link:hover { color: #fff; text-shadow: 0 0 8px #00ffff; }
 
         @media (max-width: 700px) {
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
@@ -220,6 +219,15 @@
     </style>
 </head>
 <body>
+    {% macro artist_links(artists_str) %}
+        {% if artists_str %}
+            {% for artist in artists_str.split(',') %}
+                {% set a = artist.strip() %}
+                <a href="/artist/{{ a | urlencode }}" class="artist-link">{{ a }}</a>{% if not loop.last %}, {% endif %}
+            {% endfor %}
+        {% endif %}
+    {% endmacro %}
+
     <div class="bg"></div>
     <div class="scanlines"></div>
 
@@ -233,7 +241,7 @@
         <h1>STATS</h1>
         <p class="subtitle">◈ YOUR LISTENING HISTORY ◈</p>
 
-        <!-- ── Totals ── -->
+        <!-- Totals -->
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-value">{{ total_plays }}</div>
@@ -273,7 +281,7 @@
             </div>
         </div>
 
-        <!-- ── Charts: Hour of day ── -->
+        <!-- Charts: Hour of day -->
         <div class="section">
             <h2>🕐 LISTENING BY HOUR OF DAY</h2>
             <div class="two-col">
@@ -286,7 +294,7 @@
             </div>
         </div>
 
-        <!-- ── Charts: Day of week + Month ── -->
+        <!-- Charts: Day of week + Month -->
         <div class="section">
             <h2>📅 LISTENING BY DAY & MONTH</h2>
             <div class="two-col">
@@ -299,7 +307,7 @@
             </div>
         </div>
 
-        <!-- ── This week ── -->
+        <!-- This week -->
         <div class="section">
             <h2>⚡ THIS WEEK</h2>
             <div class="two-col">
@@ -312,7 +320,7 @@
                             <tr>
                                 <td>{{ loop.index }}</td>
                                 <td>{{ row.track_name }}</td>
-                                <td>{{ row.artists }}</td>
+                                <td>{{ artist_links(row.artists) }}</td>
                                 <td>{{ row.plays }}</td>
                             </tr>
                             {% endfor %}
@@ -327,7 +335,7 @@
                             {% for row in top_artists_week %}
                             <tr>
                                 <td>{{ loop.index }}</td>
-                                <td>{{ row.artists }}</td>
+                                <td>{{ artist_links(row.artists) }}</td>
                                 <td>{{ row.plays }}</td>
                             </tr>
                             {% endfor %}
@@ -337,7 +345,7 @@
             </div>
         </div>
 
-        <!-- ── Tracks ── -->
+        <!-- Tracks -->
         <div class="section">
             <h2>🎵 TRACKS</h2>
             <div class="two-col">
@@ -350,7 +358,7 @@
                             <tr>
                                 <td>{{ loop.index }}</td>
                                 <td>{{ row.track_name }}</td>
-                                <td>{{ row.artists }}</td>
+                                <td>{{ artist_links(row.artists) }}</td>
                                 <td>{{ row.plays }}</td>
                             </tr>
                             {% endfor %}
@@ -366,7 +374,7 @@
                             <tr>
                                 <td>{{ loop.index }}</td>
                                 <td>{{ row.track_name }}</td>
-                                <td>{{ row.artists }}</td>
+                                <td>{{ artist_links(row.artists) }}</td>
                                 <td>{{ row.skips }}</td>
                             </tr>
                             {% endfor %}
@@ -376,7 +384,7 @@
             </div>
         </div>
 
-        <!-- ── Always completed ── -->
+        <!-- Always completed -->
         <div class="section">
             <h2>💚 TRACKS YOU ALWAYS COMPLETE (3+ PLAYS, 0 SKIPS)</h2>
             <table>
@@ -386,7 +394,7 @@
                     <tr>
                         <td>{{ loop.index }}</td>
                         <td>{{ row.track_name }}</td>
-                        <td>{{ row.artists }}</td>
+                        <td>{{ artist_links(row.artists) }}</td>
                         <td>{{ row.plays }}</td>
                     </tr>
                     {% endfor %}
@@ -394,7 +402,7 @@
             </table>
         </div>
 
-        <!-- ── Artists ── -->
+        <!-- Artists -->
         <div class="section">
             <h2>🎤 ARTISTS</h2>
             <div class="two-col">
@@ -406,7 +414,7 @@
                             {% for row in most_played_artists %}
                             <tr>
                                 <td>{{ loop.index }}</td>
-                                <td>{{ row.artists }}</td>
+                                <td>{{ artist_links(row.artists) }}</td>
                                 <td>{{ row.plays }}</td>
                             </tr>
                             {% endfor %}
@@ -421,7 +429,7 @@
                             {% for row in most_skipped_artists %}
                             <tr>
                                 <td>{{ loop.index }}</td>
-                                <td>{{ row.artists }}</td>
+                                <td>{{ artist_links(row.artists) }}</td>
                                 <td>{{ row.skips }}</td>
                             </tr>
                             {% endfor %}
@@ -431,7 +439,7 @@
             </div>
         </div>
 
-        <!-- ── Best artists by skip rate ── -->
+        <!-- Best artists by skip rate -->
         <div class="section">
             <h2>🏆 MOST LOVED ARTISTS (LOWEST SKIP RATE, MIN 5 PLAYS)</h2>
             <table>
@@ -440,7 +448,7 @@
                     {% for row in best_artists %}
                     <tr>
                         <td>{{ loop.index }}</td>
-                        <td>{{ row.artists }}</td>
+                        <td>{{ artist_links(row.artists) }}</td>
                         <td>{{ row.plays }}</td>
                         <td>{{ row.skips }}</td>
                         <td>{{ "%.1f"|format(row.skip_rate) }}%</td>
@@ -450,7 +458,7 @@
             </table>
         </div>
 
-        <!-- ── Albums ── -->
+        <!-- Albums -->
         <div class="section">
             <h2>💿 ALBUMS</h2>
             <div class="two-col">
@@ -463,7 +471,7 @@
                             <tr>
                                 <td>{{ loop.index }}</td>
                                 <td>{{ row.album }}</td>
-                                <td>{{ row.artists }}</td>
+                                <td>{{ artist_links(row.artists) }}</td>
                                 <td>{{ row.plays }}</td>
                             </tr>
                             {% endfor %}
@@ -479,7 +487,7 @@
                             <tr>
                                 <td>{{ loop.index }}</td>
                                 <td>{{ row.album }}</td>
-                                <td>{{ row.artists }}</td>
+                                <td>{{ artist_links(row.artists) }}</td>
                                 <td>{{ row.skips }}</td>
                             </tr>
                             {% endfor %}
@@ -489,7 +497,7 @@
             </div>
         </div>
 
-        <!-- ── Recent history ── -->
+        <!-- Recent history -->
         <div class="section">
             <h2>🕓 RECENT HISTORY</h2>
             <table>
@@ -503,9 +511,9 @@
                     {% for play in recent %}
                     <tr>
                         <td>{{ play.track_name }}</td>
-                        <td>{{ play.artists }}</td>
+                        <td>{{ artist_links(play.artists) }}</td>
                         <td>{{ play.album }}</td>
-                        <td>{{ 100 if play.progress_pct >= 95 else play.progress_pct | round(1) }}%</td>
+                        <td>{{ play.progress_pct }}%</td>
                         <td>
                             {% if play.was_skipped %}
                                 <span class="skipped-badge">SKIPPED</span>
@@ -520,7 +528,7 @@
             </table>
         </div>
 
-    </div><!-- end .content -->
+    </div>
 
     <script>
         const neonColors = ['#ff00ff','#00ffff','#ffff00','#00ff88','#ff00aa','#ff6600','#aa00ff','#00aaff'];
@@ -551,7 +559,6 @@
             }
         };
 
-        // Hour of day - plays
         new Chart(document.getElementById('hourChart'), {
             type: 'bar',
             data: {
@@ -571,7 +578,6 @@
             }}
         });
 
-        // Hour of day - skip rate
         new Chart(document.getElementById('hourSkipChart'), {
             type: 'bar',
             data: {
@@ -591,7 +597,6 @@
             }}
         });
 
-        // Day of week
         new Chart(document.getElementById('dowChart'), {
             type: 'bar',
             data: {
@@ -611,7 +616,6 @@
             }}
         });
 
-        // Month
         new Chart(document.getElementById('monthChart'), {
             type: 'bar',
             data: {

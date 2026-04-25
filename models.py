@@ -35,3 +35,10 @@ class ArtistCache(Base):
     genres      = Column(String, nullable=True)
     image_url   = Column(String, nullable=True)
     fetched_at  = Column(DateTime, server_default=func.now())
+
+class ArtistSpotifyID(Base):
+    __tablename__ = "artist_spotify_ids"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    artist_name = Column(String, nullable=False, unique=True)
+    spotify_id  = Column(String, nullable=False)
