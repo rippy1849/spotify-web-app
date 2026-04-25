@@ -278,9 +278,12 @@ async def now_playing_json():
         item = data.get("item")
         if item:
             return {
-                "name":      item["name"],
-                "artists":   ", ".join(a["name"] for a in item["artists"]),
-                "album_art": item["album"]["images"][0]["url"] if item["album"]["images"] else None,
+                "name":        item["name"],
+                "artists":     ", ".join(a["name"] for a in item["artists"]),
+                "album_art":   item["album"]["images"][0]["url"] if item["album"]["images"] else None,
+                "progress_ms": data.get("progress_ms", 0),
+                "duration_ms": item.get("duration_ms", 1),
+                "is_playing":  data.get("is_playing", False),
             }
     return {}
 
@@ -912,59 +915,6 @@ async def streaks(request: Request, db: AsyncSession = Depends(get_db)):
     })
 
 
-@app.get("/rave", response_class=HTMLResponse)
-async def rave_mode(request: Request):
-    if "access_token" not in token_store:
-        return RedirectResponse("/")
-
-    async with httpx.AsyncClient() as client:
-        np_response = await client.get(
-            SPOTIFY_NOW_PLAYING_URL,
-            headers={"Authorization": f"Bearer {token_store['access_token']}"},
-        )
-
-    if np_response.status_code == 401:
-        refreshed = await refresh_access_token()
-        if refreshed:
-            return RedirectResponse("/rave")
-        token_store.clear()
-        return RedirectResponse("/")
-
-    track        = None
-
-    if np_response.status_code == 200:
-        data = np_response.json()
-        item = data.get("item")
-        if item:
-            track = {
-                "name":        item["name"],
-                "artists":     ", ".join(a["name"] for a in item["artists"]),
-                "album_art":   item["album"]["images"][0]["url"] if item["album"]["images"] else None,
-                "is_playing":  data.get("is_playing", False),
-                "progress_ms": data.get("progress_ms", 0),
-                "duration_ms": item.get("duration_ms", 1),
-            }
-
-            async with httpx.AsyncClient() as client:
-                af_response = await client.get(
-                    f"https://api.spotify.com/v1/audio-features/{item['id']}",
-                    headers={"Authorization": f"Bearer {token_store['access_token']}"},
-                )
-            if af_response.status_code == 200:
-                af           = af_response.json()
-                bpm          = af.get("tempo", 120)
-                energy       = af.get("energy", 0.5)
-                valence      = af.get("valence", 0.5)
-                danceability = af.get("danceability", 0.5)
-
-    return templates.TemplateResponse("rave.html", {
-        "request":      request,
-        "track":        track,
-        "bpm":          bpm,
-        "energy":       energy,
-        "valence":      valence,
-        "danceability": danceability,
-    })
 
 
 @app.get("/evolution", response_class=HTMLResponse)
@@ -1423,7 +1373,7 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
     if "access_token" not in token_store:
         return RedirectResponse("/")
 
-    # Get ALL tracks including solo artists
+    # Get ALL tracks
     all_plays_q = (
         select(TrackPlay.track_name, TrackPlay.artists, TrackPlay.album_art_url)
         .group_by(TrackPlay.track_id)
@@ -1434,7 +1384,7 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
     connections  = defaultdict(lambda: {"count": 0, "tracks": set()})
     artist_plays = Counter()
 
-    # Count all plays including solo
+    # Count all plays
     all_artists_q   = select(TrackPlay.artists)
     all_artist_rows = (await db.execute(all_artists_q)).fetchall()
     for row in all_artist_rows:
@@ -1444,7 +1394,7 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
                 if a:
                     artist_plays[a] += 1
 
-    # Only build connections for tracks with multiple artists
+    # Build connections for tracks with multiple artists
     for play in all_plays:
         artists = [a.strip() for a in play.artists.split(",") if a.strip()]
         if len(artists) > 1:
@@ -1453,7 +1403,6 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
                 connections[key]["count"]  += 1
                 connections[key]["tracks"].add(play.track_name)
 
-    # All artists including solo ones
     all_artists = set(artist_plays.keys())
 
     if not all_artists:
@@ -1464,34 +1413,122 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
             "link_count": 0,
         })
 
-    # Fetch artist images from Spotify
+    # Build map of primary artist name -> spotify ID from track history
+    artist_id_map  = {}
+    artist_id_q    = (
+        select(TrackPlay.artists, TrackPlay.artist_spotify_id)
+        .where(TrackPlay.artist_spotify_id != None)
+        .group_by(TrackPlay.artists)
+    )
+    artist_id_rows = (await db.execute(artist_id_q)).fetchall()
+    for row in artist_id_rows:
+        if row.artists:
+            primary = row.artists.split(",")[0].strip()
+            if primary not in artist_id_map:
+                artist_id_map[primary] = row.artist_spotify_id
+
+    # Fetch artist images concurrently with caching
     artist_images = {}
-    async with httpx.AsyncClient() as client:
-        for artist_name in list(all_artists)[:80]:
-            try:
-                encoded = urllib.parse.quote(artist_name)
-                resp    = await client.get(
-                    f"https://api.spotify.com/v1/search?q={encoded}&type=artist&limit=1",
+
+    async def fetch_artist_image(artist_name: str):
+        # Check cache first
+        async with AsyncSessionLocal() as cache_db:
+            cache_q = select(ArtistCache).where(
+                ArtistCache.artist_name == artist_name,
+                ArtistCache.track_name  == None,
+                ArtistCache.image_url   != None,
+            ).limit(1)
+            cached = (await cache_db.execute(cache_q)).scalar_one_or_none()
+            if cached and cached.image_url:
+                artist_images[artist_name] = cached.image_url
+                return
+
+        async def save_image_to_cache(artist_name: str, image_url: str):
+            async with AsyncSessionLocal() as cache_db:
+                existing_q = select(ArtistCache).where(
+                    ArtistCache.artist_name == artist_name,
+                    ArtistCache.track_name  == None,
+                ).limit(1)
+                existing = (await cache_db.execute(existing_q)).scalar_one_or_none()
+                if existing:
+                    existing.image_url = image_url
+                    await cache_db.commit()
+                else:
+                    entry = ArtistCache(
+                        artist_name = artist_name,
+                        track_name  = None,
+                        image_url   = image_url,
+                    )
+                    cache_db.add(entry)
+                    await cache_db.commit()
+
+        try:
+            spotify_id = artist_id_map.get(artist_name)
+
+            if spotify_id:
+                # Use direct artist ID lookup — guaranteed correct
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get(
+                        f"https://api.spotify.com/v1/artists/{spotify_id}",
+                        headers={"Authorization": f"Bearer {token_store['access_token']}"},
+                    )
+                if resp.status_code == 200:
+                    data      = resp.json()
+                    images    = data.get("images", [])
+                    image_url = images[-1]["url"] if images else None
+                    artist_images[artist_name] = image_url
+                    await save_image_to_cache(artist_name, image_url)
+                    return
+
+            # No stored ID — fall back to strict exact name search only
+            encoded = urllib.parse.quote(artist_name)
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    f"https://api.spotify.com/v1/search?q={encoded}&type=artist&limit=5",
                     headers={"Authorization": f"Bearer {token_store['access_token']}"},
                 )
-                if resp.status_code == 200:
-                    items = resp.json().get("artists", {}).get("items", [])
-                    if items:
-                        images = items[0].get("images", [])
-                        artist_images[artist_name] = images[-1]["url"] if images else None
-                    else:
-                        artist_images[artist_name] = None
-            except Exception:
-                artist_images[artist_name] = None
+            if resp.status_code == 200:
+                items        = resp.json().get("artists", {}).get("items", [])
+                artist_lower = artist_name.lower().strip()
+                matched      = None
 
-    # Build nodes — all artists
+                # Exact match only — no partial matching to avoid wrong photos
+                for item in items:
+                    if item["name"].lower().strip() == artist_lower:
+                        matched = item
+                        break
+
+                if matched:
+                    images    = matched.get("images", [])
+                    image_url = images[-1]["url"] if images else None
+                    artist_images[artist_name] = image_url
+                    await save_image_to_cache(artist_name, image_url)
+                else:
+                    artist_images[artist_name] = None
+
+        except Exception:
+            artist_images[artist_name] = None
+
+    # Run concurrently in batches of 10
+    artist_list = list(all_artists)[:80]
+    batch_size  = 10
+    for i in range(0, len(artist_list), batch_size):
+        batch = artist_list[i:i + batch_size]
+        await asyncio.gather(*[fetch_artist_image(a) for a in batch])
+
+    # Build nodes
+    connected_artists = set()
+    for (a1, a2) in connections:
+        connected_artists.add(a1)
+        connected_artists.add(a2)
+
     nodes = []
     for artist in all_artists:
         nodes.append({
-            "id":         artist,
-            "image":      artist_images.get(artist),
-            "plays":      artist_plays.get(artist, 1),
-            "connected":  any(artist in (a1, a2) for (a1, a2) in connections),
+            "id":        artist,
+            "image":     artist_images.get(artist),
+            "plays":     artist_plays.get(artist, 1),
+            "connected": artist in connected_artists,
         })
 
     # Build links
@@ -1512,4 +1549,95 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
         "graph_data": graph_data,
         "node_count": len(nodes),
         "link_count": len(links),
+    })
+
+@app.get("/rave", response_class=HTMLResponse)
+async def concert(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            SPOTIFY_NOW_PLAYING_URL,
+            headers={"Authorization": f"Bearer {token_store['access_token']}"},
+        )
+
+    if response.status_code == 401:
+        refreshed = await refresh_access_token()
+        if refreshed:
+            return RedirectResponse("/rave")
+        token_store.clear()
+        return RedirectResponse("/")
+
+    track = None
+
+    if response.status_code == 200:
+        data = response.json()
+        item = data.get("item")
+        if item:
+            track = {
+                "name":        item["name"],
+                "artists":     ", ".join(a["name"] for a in item["artists"]),
+                "album_art":   item["album"]["images"][0]["url"] if item["album"]["images"] else None,
+                "is_playing":  data.get("is_playing", False),
+                "progress_ms": data.get("progress_ms", 0),
+                "duration_ms": item.get("duration_ms", 1),
+            }
+
+    # Get mood from most recent committed track in DB
+    recent_mood_q = (
+        select(TrackPlay.auto_mood)
+        .where(TrackPlay.auto_mood != None)
+        .order_by(TrackPlay.listened_at.desc())
+        .limit(1)
+    )
+    recent_mood_row = (await db.execute(recent_mood_q)).scalar_one_or_none()
+    auto_mood       = recent_mood_row if recent_mood_row else "NEUTRAL"
+
+    return templates.TemplateResponse("rave.html", {
+        "request":   request,
+        "track":     track,
+        "auto_mood": auto_mood,
+    })
+
+
+@app.get("/mosaic", response_class=HTMLResponse)
+async def mosaic(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    albums_q = (
+        select(
+            TrackPlay.album,
+            TrackPlay.artists,
+            TrackPlay.album_art_url,
+            func.count().label("plays"),
+            func.sum(case((TrackPlay.was_skipped == True, 1), else_=0)).label("skips"),
+            func.avg(TrackPlay.progress_pct).label("avg_pct"),
+        )
+        .where(TrackPlay.album_art_url != None)
+        .group_by(TrackPlay.album)
+        .order_by(func.count().desc())
+    )
+    albums = (await db.execute(albums_q)).fetchall()
+
+    album_list = []
+    for a in albums:
+        raw_avg  = a.avg_pct or 0
+        avg_pct  = 100 if raw_avg >= 95 else round(raw_avg, 1)
+        album_list.append({
+            "album":     a.album,
+            "artists":   a.artists.split(",")[0].strip() if a.artists else a.artists,
+            "art":       a.album_art_url,
+            "plays":     a.plays,
+            "skips":     a.skips,
+            "avg_pct":   avg_pct,
+            "skip_rate": round((a.skips / a.plays * 100) if a.plays else 0, 1),
+        })
+
+    import json
+    return templates.TemplateResponse("mosaic.html", {
+        "request":    request,
+        "album_list": json.dumps(album_list),
+        "count":      len(album_list),
     })

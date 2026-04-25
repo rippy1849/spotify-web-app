@@ -23,6 +23,7 @@ class TrackPlay(Base):
     month            = Column(String, nullable=True)
     auto_mood        = Column(String, nullable=True)
     primary_genre    = Column(String, nullable=True)
+    artist_spotify_id = Column(String, nullable=True)
 
 
 class ArtistCache(Base):
@@ -32,4 +33,5 @@ class ArtistCache(Base):
     artist_name = Column(String, nullable=False)
     track_name  = Column(String, nullable=True)
     genres      = Column(String, nullable=True)
+    image_url   = Column(String, nullable=True)
     fetched_at  = Column(DateTime, server_default=func.now())

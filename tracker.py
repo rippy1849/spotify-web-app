@@ -546,6 +546,7 @@ async def commit_previous_track(db: AsyncSession):
         month            = now.strftime("%B"),
         auto_mood        = auto_mood,
         primary_genre    = state.get("primary_genre"),
+        artist_spotify_id = state.get("artist_id"),
     )
 
     db.add(play)

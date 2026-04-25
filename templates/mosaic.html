@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MOSAIC // RAVE FM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            height: 100vh;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .bg {
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%),
+                #000;
+            animation: bgshift 6s ease-in-out infinite alternate;
+            z-index: 0;
+        }
+
+        @keyframes bgshift {
+            from { filter: hue-rotate(0deg); }
+            to   { filter: hue-rotate(180deg); }
+        }
+
+        /* ── Grid ── */
+        .mosaic-grid {
+            position: fixed;
+            inset: 0;
+            z-index: 2;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            overflow: hidden;
+        }
+
+        .mosaic-cell {
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s, z-index 0s;
+            flex-shrink: 0;
+        }
+
+        .mosaic-cell:hover {
+            transform: scale(1.05);
+            z-index: 10;
+        }
+
+        .mosaic-cell img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            filter: brightness(0.7);
+            transition: filter 0.2s;
+        }
+
+        .mosaic-cell:hover img { filter: brightness(1); }
+
+        .mosaic-cell .cell-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .mosaic-cell:hover .cell-overlay { opacity: 1; }
+
+        .mosaic-cell .cell-info {
+            position: absolute;
+            bottom: 6px;
+            left: 6px;
+            right: 6px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .mosaic-cell:hover .cell-info { opacity: 1; }
+
+        .cell-info .cell-title {
+            font-size: 0.65rem;
+            color: #fff;
+            letter-spacing: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .cell-info .cell-artist {
+            font-size: 0.58rem;
+            color: #00ffff;
+            letter-spacing: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .cell-info .cell-plays {
+            font-size: 0.55rem;
+            color: #ff00aa;
+            letter-spacing: 1px;
+            margin-top: 2px;
+        }
+
+        /* ── Neon border on hover based on plays ── */
+        .mosaic-cell.hot { box-shadow: inset 0 0 0 2px #ff00ff; }
+        .mosaic-cell.warm { box-shadow: inset 0 0 0 1px #ff00ff66; }
+
+        /* ── Detail panel ── */
+        .detail-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 30;
+            background: rgba(0,0,0,0.95);
+            border: 1px solid #ff00ff;
+            border-radius: 16px;
+            padding: 32px;
+            width: 360px;
+            box-shadow: 0 0 60px #ff00ff44;
+            display: none;
+            text-align: center;
+        }
+
+        .detail-panel.visible { display: block; }
+
+        .detail-panel img {
+            width: 160px;
+            height: 160px;
+            border-radius: 8px;
+            object-fit: cover;
+            margin-bottom: 16px;
+            box-shadow: 0 0 30px #ff00ff66;
+        }
+
+        .detail-panel .d-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowShift 4s linear infinite;
+            letter-spacing: 2px;
+            margin-bottom: 4px;
+        }
+
+        @keyframes rainbowShift {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
+        }
+
+        .detail-panel .d-artist {
+            color: #00ffff;
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+
+        .detail-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .detail-stat {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .detail-stat .ds-val {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+        }
+
+        .detail-stat .ds-label {
+            font-size: 0.6rem;
+            color: #ff00aa;
+            letter-spacing: 2px;
+            margin-top: 4px;
+        }
+
+        .detail-close {
+            background: none;
+            border: 1px solid #ff00aa44;
+            border-radius: 4px;
+            padding: 8px 20px;
+            color: #ff00aa;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .detail-close:hover {
+            border-color: #ff00aa;
+            background: #ff00aa22;
+        }
+
+        /* ── Overlay backdrop ── */
+        .backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 25;
+            background: rgba(0,0,0,0.7);
+            display: none;
+        }
+
+        .backdrop.visible { display: block; }
+
+        /* ── Nav ── */
+        .nav {
+            position: fixed;
+            top: 20px;
+            left: 24px;
+            z-index: 40;
+            display: flex;
+            gap: 20px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .nav.visible { opacity: 1; }
+
+        .nav a {
+            color: #ff00aa88;
+            text-decoration: none;
+            font-size: 0.72rem;
+            letter-spacing: 2px;
+            transition: color 0.2s;
+            text-shadow: 0 0 8px #ff00aa44;
+        }
+
+        .nav a:hover { color: #fff; }
+
+        /* ── Title ── */
+        .title-box {
+            position: fixed;
+            top: 20px;
+            right: 24px;
+            z-index: 40;
+            text-align: right;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .title-box.visible { opacity: 1; }
+
+        .title-box h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowShift 4s linear infinite;
+            letter-spacing: 4px;
+        }
+
+        .title-box .sub {
+            font-size: 0.65rem;
+            color: #00ffff88;
+            letter-spacing: 3px;
+            margin-top: 4px;
+        }
+
+        /* ── Search ── */
+        .search-wrap {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 40;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .search-wrap.visible { opacity: 1; }
+
+        .search-wrap input {
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #ff00ff44;
+            border-radius: 99px;
+            padding: 8px 20px;
+            color: #fff;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            outline: none;
+            width: 240px;
+            transition: border-color 0.2s;
+        }
+
+        .search-wrap input:focus {
+            border-color: #ff00ff;
+            box-shadow: 0 0 16px #ff00ff44;
+        }
+
+        .search-wrap input::placeholder { color: #555; }
+
+        .empty {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 5;
+            font-family: 'Orbitron', sans-serif;
+            color: #ff00ff;
+            text-shadow: 0 0 20px #ff00ff;
+            letter-spacing: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+
+    <div class="nav" id="nav">
+        <a href="/">⌂ HOME</a>
+        <a href="/now-playing">▶ NOW PLAYING</a>
+        <a href="/stats">◈ STATS</a>
+        <a href="/logout">⏏ LOGOUT</a>
+    </div>
+
+    <div class="title-box" id="titleBox">
+        <h1>MOSAIC</h1>
+        <div class="sub">◈ {{ count }} ALBUMS ◈</div>
+    </div>
+
+    {% if count == 0 %}
+    <div class="empty">// NO ALBUM ART YET //</div>
+    {% else %}
+
+    <div class="mosaic-grid" id="mosaicGrid"></div>
+
+    <div class="backdrop"     id="backdrop"></div>
+    <div class="detail-panel" id="detailPanel">
+        <img id="d-img" src="" alt="art">
+        <div class="d-title"  id="d-title"></div>
+        <div class="d-artist" id="d-artist"></div>
+        <div class="detail-stats">
+            <div class="detail-stat">
+                <div class="ds-val"   id="d-plays"></div>
+                <div class="ds-label">PLAYS</div>
+            </div>
+            <div class="detail-stat">
+                <div class="ds-val"   id="d-skips"></div>
+                <div class="ds-label">SKIPS</div>
+            </div>
+            <div class="detail-stat">
+                <div class="ds-val"   id="d-skiprate"></div>
+                <div class="ds-label">SKIP RATE</div>
+            </div>
+            <div class="detail-stat">
+                <div class="ds-val"   id="d-avgpct"></div>
+                <div class="ds-label">AVG LISTEN %</div>
+            </div>
+        </div>
+        <button class="detail-close" id="detailClose">✕ CLOSE</button>
+    </div>
+
+    <div class="search-wrap" id="searchWrap">
+        <input type="text" id="mosaicSearch" placeholder="SEARCH ALBUM OR ARTIST...">
+    </div>
+
+    <script>
+        const albums  = {{ album_list | safe }};
+        const grid    = document.getElementById('mosaicGrid');
+        const maxPlays = Math.max(...albums.map(a => a.plays));
+
+        // ── Mouse idle ────────────────────────────────────────────────────────
+        let mouseTimer = null;
+        const uiEls    = ['nav','titleBox','searchWrap'].map(id => document.getElementById(id));
+        document.addEventListener('mousemove', () => {
+            uiEls.forEach(el => el.classList.add('visible'));
+            clearTimeout(mouseTimer);
+            mouseTimer = setTimeout(() => uiEls.forEach(el => el.classList.remove('visible')), 3000);
+        });
+
+        // ── Build grid ────────────────────────────────────────────────────────
+        let cellSize = Math.max(80, Math.min(160, Math.floor(Math.sqrt(
+            (window.innerWidth * window.innerHeight) / albums.length
+        ))));
+
+        function buildGrid(filtered) {
+            grid.innerHTML = '';
+            filtered.forEach((album, i) => {
+                const cell = document.createElement('div');
+                cell.className = 'mosaic-cell';
+                cell.style.width  = cellSize + 'px';
+                cell.style.height = cellSize + 'px';
+
+                const intensity = album.plays / maxPlays;
+                if (intensity > 0.7)      cell.classList.add('hot');
+                else if (intensity > 0.3) cell.classList.add('warm');
+
+                const img     = document.createElement('img');
+                img.src       = album.art;
+                img.loading   = 'lazy';
+                img.alt       = album.album;
+
+                const overlay = document.createElement('div');
+                overlay.className = 'cell-overlay';
+
+                const info    = document.createElement('div');
+                info.className = 'cell-info';
+                info.innerHTML = `
+                    <div class="cell-title">${album.album}</div>
+                    <div class="cell-artist">${album.artists}</div>
+                    <div class="cell-plays">▶ ${album.plays} plays</div>
+                `;
+
+                cell.appendChild(img);
+                cell.appendChild(overlay);
+                cell.appendChild(info);
+
+                cell.addEventListener('click', () => showDetail(album));
+                grid.appendChild(cell);
+            });
+        }
+
+        buildGrid(albums);
+
+        // ── Detail panel ──────────────────────────────────────────────────────
+        function showDetail(album) {
+            document.getElementById('d-img').src         = album.art;
+            document.getElementById('d-title').textContent  = album.album;
+            document.getElementById('d-artist').textContent = album.artists;
+            document.getElementById('d-plays').textContent  = album.plays;
+            document.getElementById('d-skips').textContent  = album.skips;
+            document.getElementById('d-skiprate').textContent = album.skip_rate + '%';
+            document.getElementById('d-avgpct').textContent   = album.avg_pct + '%';
+
+            document.getElementById('detailPanel').classList.add('visible');
+            document.getElementById('backdrop').classList.add('visible');
+        }
+
+        document.getElementById('detailClose').addEventListener('click', closeDetail);
+        document.getElementById('backdrop').addEventListener('click', closeDetail);
+
+        function closeDetail() {
+            document.getElementById('detailPanel').classList.remove('visible');
+            document.getElementById('backdrop').classList.remove('visible');
+        }
+
+        // ── Search ────────────────────────────────────────────────────────────
+        document.getElementById('mosaicSearch').addEventListener('input', (e) => {
+            const q = e.target.value.trim().toLowerCase();
+            if (!q) {
+                buildGrid(albums);
+                return;
+            }
+            const filtered = albums.filter(a =>
+                a.album.toLowerCase().includes(q) ||
+                a.artists.toLowerCase().includes(q)
+            );
+            buildGrid(filtered);
+        });
+
+        // ── Resize ────────────────────────────────────────────────────────────
+        window.addEventListener('resize', () => {
+            cellSize = Math.max(80, Math.min(160, Math.floor(Math.sqrt(
+                (window.innerWidth * window.innerHeight) / albums.length
+            ))));
+            buildGrid(albums);
+        });
+    </script>
+
+    {% endif %}
+</body>
+</html>
