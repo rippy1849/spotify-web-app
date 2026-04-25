@@ -38,6 +38,26 @@ SCOPES = "user-read-currently-playing user-read-playback-state user-read-recentl
 token_store    = {}
 poller_running = False
 
+import json as _json
+TOKEN_FILE = "token_store.json"
+
+def save_token_store():
+    try:
+        with open(TOKEN_FILE, "w") as f:
+            _json.dump(token_store, f)
+    except Exception as e:
+        print(f"[TOKEN] Failed to save: {e}")
+
+def load_token_store():
+    try:
+        if os.path.exists(TOKEN_FILE):
+            with open(TOKEN_FILE, "r") as f:
+                data = _json.load(f)
+                token_store.update(data)
+                print(f"[TOKEN] Loaded saved tokens")
+    except Exception as e:
+        print(f"[TOKEN] Failed to load: {e}")
+
 
 async def get_db():
     async with AsyncSessionLocal() as session:
@@ -58,6 +78,7 @@ async def refresh_access_token():
     token_data = response.json()
     if "access_token" in token_data:
         token_store["access_token"] = token_data["access_token"]
+        save_token_store()  # ← save after refresh
         return True
     return False
 
@@ -170,6 +191,7 @@ async def poll_spotify(app):
 async def lifespan(app: FastAPI):
     global poller_running
     await init_db()
+    load_token_store()  # ← load saved tokens
     if not poller_running:
         poller_running = True
         asyncio.create_task(poll_spotify(app))
@@ -238,12 +260,14 @@ async def auth_redirect(request: Request, code: str = None, state: str = None, e
 
     token_store["access_token"]  = token_data["access_token"]
     token_store["refresh_token"] = token_data.get("refresh_token")
+    save_token_store()  # ← save after login
     return RedirectResponse("/")
 
 
 @app.get("/logout")
 async def logout():
     token_store.clear()
+    save_token_store()  # ← clear saved tokens on logout
     return RedirectResponse("/")
 
 
@@ -1852,7 +1876,12 @@ async def artist_deep_dive(request: Request, artist_name: str, db: AsyncSession 
     # Get all plays featuring this artist
     plays_q = (
         select(TrackPlay)
-        .where(TrackPlay.artists.ilike(f"%{artist_name}%"))
+        .where(
+            TrackPlay.artists.ilike(f"{artist_name},%") |  # starts with artist
+            TrackPlay.artists.ilike(f"%, {artist_name},%") |  # middle
+            TrackPlay.artists.ilike(f"%, {artist_name}") |  # ends with artist
+            TrackPlay.artists.ilike(f"{artist_name}")  # exact match (solo artist)
+        )
         .order_by(TrackPlay.listened_at.asc())
     )
     plays = (await db.execute(plays_q)).scalars().fetchall()

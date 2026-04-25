@@ -5,60 +5,47 @@
     <title>🎵 RAVE FM</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
-
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Share Tech Mono', monospace;
             min-height: 100vh;
             background: #000;
-            overflow-x: hidden;
             color: #fff;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 40px 20px;
+            padding: 40px 24px;
         }
 
-        .scanlines {
-            pointer-events: none;
+        .bg {
             position: fixed;
             inset: 0;
-            background: repeating-linear-gradient(
-                to bottom,
-                transparent 0px,
-                transparent 3px,
-                rgba(0,0,0,0.15) 3px,
-                rgba(0,0,0,0.15) 4px
-            );
-            z-index: 10;
-        }
-
-        .bg-pulse {
-            position: fixed;
-            inset: 0;
-            background: radial-gradient(ellipse at center, #1a003a 0%, #000 70%);
-            animation: bgpulse 3s ease-in-out infinite alternate;
+            background:
+                radial-gradient(ellipse at 15% 30%, #2d003a44 0%, transparent 50%),
+                radial-gradient(ellipse at 85% 70%, #003a2d44 0%, transparent 50%),
+                #000;
+            animation: bgpulse 4s ease-in-out infinite alternate;
             z-index: 0;
         }
 
-@keyframes bgpulse {
-    from { background: radial-gradient(ellipse at center, #1a003a 0%, #000 70%); }
-    to   { background: radial-gradient(ellipse at center, #2a003a 0%, #000 70%); }
-}
-
-        .content {
-            position: relative;
-            z-index: 5;
-            text-align: center;
-            width: 100%;
-            max-width: 700px;
+        @keyframes bgpulse {
+            from { filter: hue-rotate(0deg); }
+            to   { filter: hue-rotate(30deg); }
         }
 
-        h1 {
+        .content { position: relative; z-index: 5; max-width: 1200px; margin: 0 auto; }
+
+        /* ── Masthead ── */
+        .masthead {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #ff00ff22;
+        }
+
+        .masthead h1 {
             font-family: 'Orbitron', sans-serif;
-            font-size: 3.5rem;
+            font-size: 4rem;
             font-weight: 900;
             background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
             background-size: 300% 100%;
@@ -66,32 +53,39 @@
             -webkit-text-fill-color: transparent;
             background-clip: text;
             animation: rainbowShift 4s linear infinite;
-            filter: drop-shadow(0 0 18px #ff00ff);
-            letter-spacing: 4px;
+            filter: drop-shadow(0 0 15px #ff00ff);
+            letter-spacing: 8px;
+            line-height: 1;
         }
 
-        @keyframes rainbowShift {
-            0%   { background-position: 0% 50%; }
-            100% { background-position: 300% 50%; }
+        @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+
+        .masthead-right { text-align: right; }
+        .masthead-right .issue { font-size: 0.65rem; color: #ff00aa88; letter-spacing: 3px; }
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            justify-content: flex-end;
+            font-size: 0.7rem;
+            color: #00ff88;
+            letter-spacing: 2px;
+            margin-top: 6px;
         }
 
-        .subtitle {
-            font-size: 0.85rem;
-            letter-spacing: 6px;
-            color: #00ffff;
-            text-shadow: 0 0 10px #00ffff;
-            margin: 10px 0 32px;
-            animation: flicker 4s infinite;
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #00ff88;
+            box-shadow: 0 0 8px #00ff88;
+            animation: blink 1s step-start infinite;
         }
 
-        @keyframes flicker {
-            0%, 95%, 100% { opacity: 1; }
-            96% { opacity: 0.4; }
-            97% { opacity: 1; }
-            98% { opacity: 0.2; }
-        }
+        @keyframes blink { 50% { opacity: 0; } }
 
-        /* ── Login button ── */
+        /* ── Login ── */
         a.login-btn {
             display: inline-block;
             font-family: 'Orbitron', sans-serif;
@@ -107,300 +101,741 @@
             animation: btnShift 1.5s linear infinite;
             box-shadow: 0 0 24px #ff00ff, 0 0 48px #00ffff44;
             transition: transform 0.1s;
+            margin-top: 24px;
         }
 
-        a.login-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 40px #ff00ff, 0 0 80px #00ffff88;
+        a.login-btn:hover { transform: scale(1.05); }
+        @keyframes btnShift { 0% { background-position: 0%; } 100% { background-position: 200%; } }
+
+        .login-hero {
+            text-align: center;
+            padding: 80px 0;
         }
 
-        @keyframes btnShift {
-            0%   { background-position: 0%; }
-            100% { background-position: 200%; }
-        }
-
-        /* ── Status ── */
-        .status-row {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
+        .login-hero .sub {
+            font-size: 0.75rem;
+            color: #00ffff88;
+            letter-spacing: 4px;
             margin-bottom: 32px;
-            font-size: 0.8rem;
-            letter-spacing: 3px;
-            color: #00ff88;
-            text-shadow: 0 0 10px #00ff88;
         }
 
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #00ff88;
-            box-shadow: 0 0 12px #00ff88;
-            animation: blink 1s step-start infinite;
-        }
-
-        @keyframes blink { 50% { opacity: 0; } }
-
-        /* ── Nav grid ── */
-        .nav-grid {
+        /* ── Magazine grid ── */
+        .magazine-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: 2fr 1fr 1fr;
+            grid-template-rows: auto auto auto;
             gap: 12px;
-            margin-bottom: 24px;
         }
 
-        .nav-card {
+        /* ── Cards ── */
+        .mag-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--color, #ff00ff)22;
+            border-radius: 8px;
+            padding: 24px;
+            text-decoration: none;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 20px 12px;
-            border-radius: 10px;
-            text-decoration: none;
-            background: rgba(255,255,255,0.03);
-            border: 1px solid var(--card-color, #ff00ff44);
-            color: #fff;
-            transition: background 0.2s, box-shadow 0.2s, transform 0.15s, border-color 0.2s;
+            justify-content: flex-end;
             position: relative;
             overflow: hidden;
+            transition: all 0.25s;
+            cursor: pointer;
+            min-height: 160px;
         }
 
-        .nav-card::before {
+        .mag-card::after {
             content: '';
             position: absolute;
-            inset: 0;
-            background: var(--card-color, #ff00ff);
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--color, #ff00ff), transparent);
             opacity: 0;
-            transition: opacity 0.2s;
+            transition: opacity 0.3s;
         }
 
-        .nav-card:hover::before { opacity: 0.07; }
-
-        .nav-card:hover {
-            border-color: var(--card-color, #ff00ff);
-            box-shadow: 0 0 20px var(--card-color, #ff00ff44);
-            transform: translateY(-2px);
+        .mag-card:hover {
+            border-color: var(--color, #ff00ff)88;
+            background: rgba(255,255,255,0.04);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 32px var(--color, #ff00ff)22, 0 0 0 1px var(--color, #ff00ff)22;
         }
 
-        .nav-card .icon {
-            font-size: 1.6rem;
+        .mag-card:hover::after { opacity: 1; }
+
+        /* ── Card background visuals ── */
+        .mag-card .card-bg {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+            border-radius: 8px;
+        }
+
+        .mag-card .card-bg img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.25;
+            transition: opacity 0.3s;
+            filter: saturate(1.5);
+        }
+
+        .mag-card:hover .card-bg img { opacity: 0.4; }
+
+        .mag-card .card-bg canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .mag-card .card-bg .overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0.1) 100%);
+        }
+
+        .mag-card .card-icon {
+            font-size: 2.5rem;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            filter: drop-shadow(0 0 12px var(--color, #ff00ff));
+            opacity: 0.7;
+            transition: opacity 0.3s, transform 0.3s;
+            z-index: 2;
+        }
+
+        .mag-card:hover .card-icon { opacity: 1; transform: scale(1.1); }
+        .mag-card.hero .card-icon  { font-size: 3.5rem; top: 24px; right: 24px; }
+
+        .mag-card .card-category {
+            font-size: 0.55rem;
+            letter-spacing: 4px;
+            color: var(--color, #ff00ff);
+            text-shadow: 0 0 8px var(--color, #ff00ff)88;
+            margin-bottom: 6px;
             position: relative;
-            z-index: 1;
+            z-index: 2;
         }
 
-        .nav-card .label {
+        .mag-card .card-title {
             font-family: 'Orbitron', sans-serif;
-            font-size: 0.6rem;
-            letter-spacing: 2px;
-            color: var(--card-color, #ff00ff);
+            font-size: 0.95rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            color: #fff;
             position: relative;
-            z-index: 1;
-            text-shadow: 0 0 8px var(--card-color, #ff00ff44);
+            z-index: 2;
+            margin-bottom: 6px;
         }
 
-        .nav-card .desc {
-            font-size: 0.58rem;
-            color: #666;
+        .mag-card.hero .card-title { font-size: 1.5rem; }
+
+        .mag-card .card-desc {
+            font-size: 0.62rem;
+            color: #888;
             letter-spacing: 1px;
             position: relative;
-            z-index: 1;
+            z-index: 2;
+            line-height: 1.6;
         }
 
-        /* Featured card spans full width */
-        .nav-card.featured {
-            grid-column: span 3;
-            flex-direction: row;
-            gap: 16px;
-            padding: 20px 24px;
-            justify-content: center;
+        /* Grid placements */
+        .hero-now  { grid-column: 1; grid-row: 1 / 3; min-height: 300px; }
+        .hero-rave { grid-column: 2 / 4; grid-row: 1; }
+        .card-a    { grid-column: 2; grid-row: 2; }
+        .card-b    { grid-column: 3; grid-row: 2; }
+        .card-c    { grid-column: 1; grid-row: 3; }
+        .card-d    { grid-column: 2; grid-row: 3; }
+        .card-e    { grid-column: 3; grid-row: 3; }
+
+        /* ── Section label ── */
+        .section-label {
+            font-size: 0.58rem;
+            letter-spacing: 5px;
+            color: #ff00ff33;
+            margin: 20px 0 8px;
         }
 
-        .nav-card.featured .icon { font-size: 2rem; }
-
-        .nav-card.featured .label {
-            font-size: 0.85rem;
-            letter-spacing: 4px;
+        /* ── Small cards ── */
+        .small-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 8px;
+            margin-top: 4px;
         }
 
-        /* Logout row */
-        .logout-row {
-            margin-top: 8px;
-        }
-
-        .logout-row a {
-            color: #333;
+        .small-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--color, #ff00ff)22;
+            border-radius: 6px;
+            padding: 14px 10px;
+            text-align: center;
             text-decoration: none;
-            font-size: 0.7rem;
-            letter-spacing: 2px;
-            transition: color 0.2s;
+            transition: all 0.2s;
+            cursor: pointer;
         }
 
+        .small-card:hover {
+            border-color: var(--color, #ff00ff)66;
+            background: rgba(255,255,255,0.04);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px var(--color, #ff00ff)22;
+        }
+
+        .small-card .s-icon  { font-size: 1.3rem; display: block; margin-bottom: 6px; filter: drop-shadow(0 0 6px var(--color, #ff00ff)); }
+        .small-card .s-label { font-size: 0.55rem; letter-spacing: 1.5px; color: var(--color, #ff00ff); }
+        .small-card .s-desc  { font-size: 0.5rem; color: #555; letter-spacing: 0.5px; margin-top: 3px; }
+
+        /* ── Logout ── */
+        .logout-row { margin-top: 24px; text-align: center; }
+        .logout-row a { color: #333; text-decoration: none; font-size: 0.7rem; letter-spacing: 2px; transition: color 0.2s; }
         .logout-row a:hover { color: #ff00aa; }
 
-        @media (max-width: 500px) {
-            h1 { font-size: 2.5rem; }
-            .nav-grid { grid-template-columns: repeat(2, 1fr); }
-            .nav-card.featured { grid-column: span 2; }
+        @media (max-width: 900px) {
+            .masthead h1 { font-size: 2.5rem; }
+            .magazine-grid { grid-template-columns: 1fr 1fr; }
+            .hero-now  { grid-column: 1 / 3; grid-row: 1; min-height: 200px; }
+            .hero-rave { grid-column: 1 / 3; grid-row: 2; }
+            .card-a    { grid-column: 1; grid-row: 3; }
+            .card-b    { grid-column: 2; grid-row: 3; }
+            .card-c    { grid-column: 1; grid-row: 4; }
+            .card-d    { grid-column: 2; grid-row: 4; }
+            .card-e    { grid-column: 1 / 3; grid-row: 5; }
+        }
+
+        @media (max-width: 600px) {
+            .masthead h1 { font-size: 2rem; letter-spacing: 4px; }
+            .magazine-grid { grid-template-columns: 1fr; }
+            .hero-now  { grid-column: 1; grid-row: 1; }
+            .hero-rave { grid-column: 1; grid-row: 2; }
+            .card-a    { grid-column: 1; grid-row: 3; }
+            .card-b    { grid-column: 1; grid-row: 4; }
+            .card-c    { grid-column: 1; grid-row: 5; }
+            .card-d    { grid-column: 1; grid-row: 6; }
+            .card-e    { grid-column: 1; grid-row: 7; }
+            .small-grid { grid-template-columns: repeat(3, 1fr); }
         }
     </style>
 </head>
 <body>
-    <div class="bg-pulse"></div>
-    <div class="scanlines"></div>
-
+    <div class="bg"></div>
     <div class="content">
-        <h1>RAVE FM</h1>
-        <p class="subtitle">◈ SPOTIFY INTERFACE v1.0 ◈</p>
 
-        {% if is_authenticated %}
-            <div class="status-row">
-                <div class="status-dot"></div>
-                CONNECTED
+        <!-- Masthead -->
+        <div class="masthead">
+            <h1>RAVE FM</h1>
+            <div class="masthead-right">
+                <div class="issue">◈ SPOTIFY INTERFACE v1.0 ◈</div>
+                {% if is_authenticated %}
+                <div class="status-row">
+                    <div class="status-dot"></div>
+                    CONNECTED
+                </div>
+                {% endif %}
             </div>
+        </div>
 
-            <div class="nav-grid">
+        {% if not is_authenticated %}
 
-                <!-- Featured -->
-                <a href="/now-playing" class="nav-card featured" style="--card-color: #00ff88;">
-                    <div class="icon">▶</div>
-                    <div>
-                        <div class="label">NOW PLAYING</div>
-                        <div class="desc">current track</div>
-                    </div>
-                </a>
-
-                <a href="/rave" class="nav-card featured" style="--card-color: #ff00ff;">
-                    <div class="icon">🎆</div>
-                    <div>
-                        <div class="label">RAVE MODE</div>
-                        <div class="desc">Visuals</div>
-                    </div>
-                </a>
-
-                <a href="/artist-graph" class="nav-card featured" style="--card-color: #aa00ff;">
-    <div class="icon">🕸</div>
-    <div>
-        <div class="label">ARTIST GRAPH</div>
-        <div class="desc">interactive connection map</div>
-    </div>
-</a>
-
-<!-- Row -->
-
-
-                
-                <a href="/stats" class="nav-card" style="--card-color: #00ffff;">
-                    <div class="icon">◈</div>
-                    <div class="label">STATS</div>
-                    <div class="desc">listening history</div>
-                </a>
-
-                <a href="/vibe" class="nav-card" style="--card-color: #ff00aa;">
-                    <div class="icon">🎵</div>
-                    <div class="label">VIBE</div>
-                    <div class="desc">auto mood tracking</div>
-                </a>
-
-                <a href="/recap" class="nav-card" style="--card-color: #ffff00;">
-                    <div class="icon">📋</div>
-                    <div class="label">RECAP</div>
-                    <div class="desc">today's summary</div>
-                </a>
-
-                <!-- Row -->
-                <a href="/streaks" class="nav-card" style="--card-color: #ff6600;">
-                    <div class="icon">🔥</div>
-                    <div class="label">STREAKS</div>
-                    <div class="desc">keep it going</div>
-                </a>
-
-                <a href="/clock" class="nav-card" style="--card-color: #aa00ff;">
-                    <div class="icon">🕐</div>
-                    <div class="label">CLOCK</div>
-                    <div class="desc">24h activity</div>
-                </a>
-
-                <a href="/skip-heatmap" class="nav-card" style="--card-color: #ff0066;">
-                    <div class="icon">🎯</div>
-                    <div class="label">SKIP MAP</div>
-                    <div class="desc">where you bail</div>
-                </a>
-
-                <!-- Row -->
-                <a href="/evolution" class="nav-card" style="--card-color: #00ff88;">
-                    <div class="icon">🧬</div>
-                    <div class="label">EVOLUTION</div>
-                    <div class="desc">taste over time</div>
-                </a>
-
-                <a href="/avoiding" class="nav-card" style="--card-color: #ff00ff;">
-                    <div class="icon">👻</div>
-                    <div class="label">AVOIDING</div>
-                    <div class="desc">never finished</div>
-                </a>
-
-
-                <!-- Row -->
-                <a href="/queue" class="nav-card" style="--card-color: #ffff00;">
-                    <div class="icon">⚡</div>
-                    <div class="label">QUEUE</div>
-                    <div class="desc">up next</div>
-                </a>
-
-                <a href="/recently-played" class="nav-card" style="--card-color: #ff6600;">
-                    <div class="icon">⏮</div>
-                    <div class="label">RECENT</div>
-                    <div class="desc">last 50 tracks</div>
-                </a>
-
-                <a href="/search" class="nav-card" style="--card-color: #aa00ff;">
-                    <div class="icon">🔍</div>
-                    <div class="label">SEARCH</div>
-                    <div class="desc">your history</div>
-                </a>
-
-                <a href="/calendar" class="nav-card" style="--card-color: #00ff88;">
-    <div class="icon">📅</div>
-    <div class="label">CALENDAR</div>
-    <div class="desc">365 day heatmap</div>
-</a>
-
-<a href="/sessions" class="nav-card" style="--card-color: #ffff00;">
-    <div class="icon">⚡</div>
-    <div class="label">SESSIONS</div>
-    <div class="desc">peak listening sessions</div>
-</a>
-
-<a href="/mosaic" class="nav-card" style="--card-color: #00ffff;">
-    <div class="icon">🖼</div>
-    <div class="label">MOSAIC</div>
-    <div class="desc">album art wall</div>
-</a>
-
-<a href="/time-machine" class="nav-card" style="--card-color: #00ffff;">
-    <div class="icon">⏰</div>
-    <div class="label">TIME MACHINE</div>
-    <div class="desc">travel back in time</div>
-</a>
-
-<a href="/artist-search" class="nav-card" style="--card-color: #ff00aa;">
-    <div class="icon">🎤</div>
-    <div class="label">ARTISTS</div>
-    <div class="desc">deep dive any artist</div>
-</a>
-
-            </div>
-
-            <div class="logout-row">
-                <a href="/logout">⏏ DISCONNECT</a>
-            </div>
+        <div class="login-hero">
+            <div class="sub">◈ CONNECT YOUR SPOTIFY ACCOUNT TO GET STARTED ◈</div>
+            <a class="login-btn" href="/login">⚡ LOGIN WITH SPOTIFY</a>
+        </div>
 
         {% else %}
-            <a class="login-btn" href="/login">⚡ LOGIN WITH SPOTIFY</a>
+
+        <!-- Main grid -->
+        <div class="magazine-grid">
+
+            <!-- NOW PLAYING -->
+            <a href="/now-playing" class="mag-card hero hero-now" style="--color:#00ff88;">
+                <div class="card-bg">
+                    {% if now_playing_art %}
+                    <img src="{{ now_playing_art }}" alt="album art">
+                    {% else %}
+                    <canvas id="npCanvas"></canvas>
+                    {% endif %}
+                    <div class="overlay"></div>
+                </div>
+                <div class="card-icon">▶</div>
+                <div class="card-category">LIVE</div>
+                <div class="card-title">NOW PLAYING</div>
+                <div class="card-desc">
+                    {% if now_playing_name %}
+                        {{ now_playing_name }}<br>
+                        <span style="color:#00ffff88;">{{ now_playing_artist }}</span>
+                    {% else %}
+                        Current track with album art and progress
+                    {% endif %}
+                </div>
+            </a>
+
+            <!-- RAVE MODE -->
+            <a href="/rave" class="mag-card hero hero-rave" style="--color:#ff00ff;">
+                <div class="card-bg">
+                    <canvas id="raveCanvas"></canvas>
+                    <div class="overlay"></div>
+                </div>
+                <div class="card-icon">🎆</div>
+                <div class="card-category">EXPERIENCE</div>
+                <div class="card-title">RAVE MODE</div>
+                <div class="card-desc">Immersive mood-reactive visual experience with album art color sampling</div>
+            </a>
+
+            <!-- STATS -->
+            <a href="/stats" class="mag-card card-a" style="--color:#00ffff;">
+                <div class="card-bg">
+                    <canvas id="statsCanvas"></canvas>
+                    <div class="overlay"></div>
+                </div>
+                <div class="card-icon">◈</div>
+                <div class="card-category">ANALYTICS</div>
+                <div class="card-title">STATS</div>
+                <div class="card-desc">Full listening statistics dashboard</div>
+            </a>
+
+            <!-- VIBE -->
+            <a href="/vibe" class="mag-card card-b" style="--color:#ffff00;">
+                <div class="card-bg">
+                    <canvas id="vibeCanvas"></canvas>
+                    <div class="overlay"></div>
+                </div>
+                <div class="card-icon">🎵</div>
+                <div class="card-category">MOOD</div>
+                <div class="card-title">VIBE</div>
+                <div class="card-desc">Auto mood tracking and genre analysis</div>
+            </a>
+
+            <!-- ARTIST GRAPH -->
+            <a href="/artist-graph" class="mag-card card-c" style="--color:#ff6600;">
+                <div class="card-bg">
+                    <canvas id="graphCanvas"></canvas>
+                    <div class="overlay"></div>
+                </div>
+                <div class="card-icon">🕸</div>
+                <div class="card-category">VISUAL</div>
+                <div class="card-title">ARTIST GRAPH</div>
+                <div class="card-desc">Interactive artist connection map with photos</div>
+            </a>
+
+            <!-- RECAP -->
+            <a href="/recap" class="mag-card card-d" style="--color:#aa00ff;">
+                <div class="card-bg">
+                    <canvas id="recapCanvas"></canvas>
+                    <div class="overlay"></div>
+                </div>
+                <div class="card-icon">📋</div>
+                <div class="card-category">DAILY</div>
+                <div class="card-title">RECAP</div>
+                <div class="card-desc">Today's full listening summary</div>
+            </a>
+
+            <!-- ARTISTS -->
+            <a href="/artist-search" class="mag-card card-e" style="--color:#ff0066;">
+                <div class="card-bg">
+                    <canvas id="artistCanvas"></canvas>
+                    <div class="overlay"></div>
+                </div>
+                <div class="card-icon">🎤</div>
+                <div class="card-category">DEEP DIVE</div>
+                <div class="card-title">ARTISTS</div>
+                <div class="card-desc">Full profile for any artist in your history</div>
+            </a>
+
+        </div>
+
+        <!-- Secondary features -->
+        <div class="section-label">◈ MORE FEATURES</div>
+        <div class="small-grid">
+            <a href="/calendar" class="small-card" style="--color:#ffff00;">
+                <span class="s-icon">📅</span>
+                <span class="s-label">CALENDAR</span>
+                <span class="s-desc">365 day heatmap</span>
+            </a>
+            <a href="/sessions" class="small-card" style="--color:#00ff88;">
+                <span class="s-icon">⚡</span>
+                <span class="s-label">SESSIONS</span>
+                <span class="s-desc">peak listening</span>
+            </a>
+            <a href="/streaks" class="small-card" style="--color:#ff6600;">
+                <span class="s-icon">🔥</span>
+                <span class="s-label">STREAKS</span>
+                <span class="s-desc">keep it going</span>
+            </a>
+            <a href="/skip-heatmap" class="small-card" style="--color:#ff0066;">
+                <span class="s-icon">🎯</span>
+                <span class="s-label">SKIP MAP</span>
+                <span class="s-desc">where you bail</span>
+            </a>
+            <a href="/mosaic" class="small-card" style="--color:#00ffff;">
+                <span class="s-icon">🖼</span>
+                <span class="s-label">MOSAIC</span>
+                <span class="s-desc">album art wall</span>
+            </a>
+            <a href="/evolution" class="small-card" style="--color:#ff00ff;">
+                <span class="s-icon">🧬</span>
+                <span class="s-label">EVOLUTION</span>
+                <span class="s-desc">taste over time</span>
+            </a>
+            <a href="/avoiding" class="small-card" style="--color:#aa00ff;">
+                <span class="s-icon">👻</span>
+                <span class="s-label">AVOIDING</span>
+                <span class="s-desc">never finished</span>
+            </a>
+            <a href="/clock" class="small-card" style="--color:#00aaff;">
+                <span class="s-icon">🕐</span>
+                <span class="s-label">CLOCK</span>
+                <span class="s-desc">24h activity</span>
+            </a>
+            <a href="/time-machine" class="small-card" style="--color:#ffff00;">
+                <span class="s-icon">⏰</span>
+                <span class="s-label">TIME MACHINE</span>
+                <span class="s-desc">travel back</span>
+            </a>
+            <a href="/queue" class="small-card" style="--color:#00ff88;">
+                <span class="s-icon">⚡</span>
+                <span class="s-label">QUEUE</span>
+                <span class="s-desc">up next</span>
+            </a>
+            <a href="/recently-played" class="small-card" style="--color:#ff6600;">
+                <span class="s-icon">⏮</span>
+                <span class="s-label">RECENT</span>
+                <span class="s-desc">last 50 tracks</span>
+            </a>
+            <a href="/search" class="small-card" style="--color:#ff00aa;">
+                <span class="s-icon">🔍</span>
+                <span class="s-label">SEARCH</span>
+                <span class="s-desc">your history</span>
+            </a>
+        </div>
+
+        <div class="logout-row">
+            <a href="/logout">⏏ DISCONNECT</a>
+        </div>
+
         {% endif %}
     </div>
+
+    <script>
+        const t0 = Date.now();
+        function t() { return (Date.now() - t0) / 1000; }
+
+        // ── NOW PLAYING fallback canvas ───────────────────────────────────
+        const npCanvas = document.getElementById('npCanvas');
+        if (npCanvas) {
+            const npc = npCanvas.getContext('2d');
+            function drawNP() {
+                requestAnimationFrame(drawNP);
+                const W = npCanvas.offsetWidth;
+                const H = npCanvas.offsetHeight;
+                if (!W || !H) return;
+                npCanvas.width  = W;
+                npCanvas.height = H;
+                npc.fillStyle = 'rgba(0,0,0,0.06)';
+                npc.fillRect(0, 0, W, H);
+                const time = t();
+                for (let i = 0; i < 5; i++) {
+                    const y    = H / 2 + Math.sin(time * 1.5 + i * 0.8) * (H * 0.3);
+                    const grad = npc.createRadialGradient(W/2, y, 0, W/2, y, W * 0.4);
+                    grad.addColorStop(0, '#00ff8833');
+                    grad.addColorStop(1, 'transparent');
+                    npc.fillStyle = grad;
+                    npc.fillRect(0, 0, W, H);
+                }
+            }
+            drawNP();
+        }
+
+        // ── RAVE MODE — plasma ────────────────────────────────────────────
+        const raveCanvas = document.getElementById('raveCanvas');
+        if (raveCanvas) {
+            const rc = raveCanvas.getContext('2d');
+            function drawRave() {
+                requestAnimationFrame(drawRave);
+                const W = raveCanvas.offsetWidth;
+                const H = raveCanvas.offsetHeight;
+                if (!W || !H) return;
+                raveCanvas.width  = W;
+                raveCanvas.height = H;
+                const time  = t();
+                const scale = 0.008;
+                const step  = 4;
+                const id    = rc.createImageData(W, H);
+                const d     = id.data;
+                for (let y = 0; y < H; y += step) {
+                    for (let x = 0; x < W; x += step) {
+                        const v = Math.sin(x*scale+time*1.2) + Math.sin(y*scale+time*0.8) +
+                                  Math.sin((x+y)*scale*0.5+time*1.5) +
+                                  Math.sin(Math.sqrt(Math.pow(x-W/2,2)+Math.pow(y-H/2,2))*scale+time);
+                        const norm = (v+4)/8;
+                        const hue  = (norm*360+time*60)%360;
+                        const r = Math.floor(Math.sin(hue*Math.PI/180)*127+128);
+                        const g = Math.floor(Math.sin((hue+120)*Math.PI/180)*127+128);
+                        const b = Math.floor(Math.sin((hue+240)*Math.PI/180)*127+128);
+                        for (let dy=0;dy<step&&y+dy<H;dy++) for (let dx=0;dx<step&&x+dx<W;dx++) {
+                            const i=((y+dy)*W+(x+dx))*4;
+                            d[i]=r;d[i+1]=g;d[i+2]=b;d[i+3]=180;
+                        }
+                    }
+                }
+                rc.putImageData(id, 0, 0);
+            }
+            drawRave();
+        }
+
+        // ── STATS — animated bar chart ────────────────────────────────────
+        const statsCanvas = document.getElementById('statsCanvas');
+        if (statsCanvas) {
+            const sc   = statsCanvas.getContext('2d');
+            const bars = Array.from({length:24}, (_, i) => ({
+                height: 0.1 + Math.random() * 0.9,
+                color:  ['#ff00ff','#00ffff','#ffff00','#00ff88','#ff00aa','#ff6600'][i%6],
+            }));
+            function drawStats() {
+                requestAnimationFrame(drawStats);
+                const W = statsCanvas.offsetWidth;
+                const H = statsCanvas.offsetHeight;
+                if (!W || !H) return;
+                statsCanvas.width  = W;
+                statsCanvas.height = H;
+                sc.clearRect(0, 0, W, H);
+                const bw   = W / bars.length;
+                const time = t();
+                bars.forEach((bar, i) => {
+                    bar.height = 0.2 + Math.abs(Math.sin(time * 0.8 + i * 0.4)) * 0.7;
+                    const bh   = bar.height * H * 0.85;
+                    const grad = sc.createLinearGradient(0, H, 0, H - bh);
+                    grad.addColorStop(0, bar.color + 'ff');
+                    grad.addColorStop(1, bar.color + '22');
+                    sc.fillStyle   = grad;
+                    sc.shadowColor = bar.color;
+                    sc.shadowBlur  = 8;
+                    sc.fillRect(i * bw + 1, H - bh, bw - 2, bh);
+                });
+                sc.shadowBlur = 0;
+            }
+            drawStats();
+        }
+
+        // ── VIBE — floating mood orbs ─────────────────────────────────────
+        const vibeCanvas = document.getElementById('vibeCanvas');
+        if (vibeCanvas) {
+            const vc   = vibeCanvas.getContext('2d');
+            const orbs = Array.from({length: 8}, (_, i) => ({
+                x:     Math.random(),
+                y:     Math.random(),
+                r:     0.06 + Math.random() * 0.1,
+                vx:    (Math.random() - 0.5) * 0.002,
+                vy:    (Math.random() - 0.5) * 0.002,
+                phase: Math.random() * Math.PI * 2,
+                color: ['#ff00ff','#00ffff','#ffff00','#00ff88','#ff00aa','#ff6600','#aa00ff','#00aaff'][i],
+            }));
+            function drawVibe() {
+                requestAnimationFrame(drawVibe);
+                const W = vibeCanvas.offsetWidth;
+                const H = vibeCanvas.offsetHeight;
+                if (!W || !H) return;
+                vibeCanvas.width  = W;
+                vibeCanvas.height = H;
+                vc.fillStyle = 'rgba(0,0,0,0.1)';
+                vc.fillRect(0, 0, W, H);
+                const time = t();
+                orbs.forEach(orb => {
+                    orb.x += orb.vx; orb.y += orb.vy;
+                    if (orb.x < 0 || orb.x > 1) orb.vx *= -1;
+                    if (orb.y < 0 || orb.y > 1) orb.vy *= -1;
+                    const px   = orb.x * W;
+                    const py   = orb.y * H;
+                    const pr   = orb.r * Math.min(W, H) * (1 + Math.sin(time + orb.phase) * 0.2);
+                    const grad = vc.createRadialGradient(px, py, 0, px, py, pr);
+                    grad.addColorStop(0, orb.color + 'cc');
+                    grad.addColorStop(0.5, orb.color + '44');
+                    grad.addColorStop(1, orb.color + '00');
+                    vc.fillStyle   = grad;
+                    vc.shadowColor = orb.color;
+                    vc.shadowBlur  = 20;
+                    vc.beginPath();
+                    vc.arc(px, py, pr, 0, Math.PI * 2);
+                    vc.fill();
+                });
+                vc.shadowBlur = 0;
+            }
+            drawVibe();
+        }
+
+        // ── ARTIST GRAPH — mini node network ─────────────────────────────
+        const graphCanvas = document.getElementById('graphCanvas');
+        if (graphCanvas) {
+            const gc    = graphCanvas.getContext('2d');
+            const nodes = Array.from({length: 12}, () => ({
+                x:     0.1 + Math.random() * 0.8,
+                y:     0.1 + Math.random() * 0.8,
+                vx:    (Math.random() - 0.5) * 0.001,
+                vy:    (Math.random() - 0.5) * 0.001,
+                r:     3 + Math.random() * 5,
+                color: ['#ff6600','#ffaa00','#ff00aa','#00ffff','#aa00ff'][Math.floor(Math.random()*5)],
+            }));
+            const edges = Array.from({length: 14}, () => ({
+                a: Math.floor(Math.random() * nodes.length),
+                b: Math.floor(Math.random() * nodes.length),
+            })).filter(e => e.a !== e.b);
+
+            function drawGraph() {
+                requestAnimationFrame(drawGraph);
+                const W = graphCanvas.offsetWidth;
+                const H = graphCanvas.offsetHeight;
+                if (!W || !H) return;
+                graphCanvas.width  = W;
+                graphCanvas.height = H;
+                gc.fillStyle = 'rgba(0,0,0,0.08)';
+                gc.fillRect(0, 0, W, H);
+                nodes.forEach(n => {
+                    n.x += n.vx; n.y += n.vy;
+                    if (n.x < 0.05 || n.x > 0.95) n.vx *= -1;
+                    if (n.y < 0.05 || n.y > 0.95) n.vy *= -1;
+                });
+                edges.forEach(e => {
+                    const a = nodes[e.a], b = nodes[e.b];
+                    gc.save();
+                    gc.globalAlpha  = 0.25;
+                    gc.strokeStyle  = a.color;
+                    gc.lineWidth    = 0.8;
+                    gc.shadowColor  = a.color;
+                    gc.shadowBlur   = 4;
+                    gc.beginPath();
+                    gc.moveTo(a.x * W, a.y * H);
+                    gc.lineTo(b.x * W, b.y * H);
+                    gc.stroke();
+                    gc.restore();
+                });
+                nodes.forEach(n => {
+                    gc.save();
+                    gc.fillStyle   = n.color;
+                    gc.shadowColor = n.color;
+                    gc.shadowBlur  = 12;
+                    gc.beginPath();
+                    gc.arc(n.x * W, n.y * H, n.r, 0, Math.PI * 2);
+                    gc.fill();
+                    gc.restore();
+                });
+            }
+            drawGraph();
+        }
+
+        // ── RECAP — scrolling timeline ────────────────────────────────────
+        const recapCanvas = document.getElementById('recapCanvas');
+        if (recapCanvas) {
+            const recc  = recapCanvas.getContext('2d');
+            const lines = Array.from({length: 20}, () => ({
+                y:     Math.random(),
+                width: 0.2 + Math.random() * 0.6,
+                color: ['#aa00ff','#cc00ff','#ff00aa','#9900cc'][Math.floor(Math.random()*4)],
+                speed: 0.0003 + Math.random() * 0.0005,
+            }));
+            function drawRecap() {
+                requestAnimationFrame(drawRecap);
+                const W = recapCanvas.offsetWidth;
+                const H = recapCanvas.offsetHeight;
+                if (!W || !H) return;
+                recapCanvas.width  = W;
+                recapCanvas.height = H;
+                recc.fillStyle = 'rgba(0,0,0,0.06)';
+                recc.fillRect(0, 0, W, H);
+                lines.forEach(line => {
+                    line.y = (line.y + line.speed) % 1;
+                    const y = line.y * H;
+                    recc.save();
+                    recc.globalAlpha  = 0.5;
+                    recc.strokeStyle  = line.color;
+                    recc.shadowColor  = line.color;
+                    recc.shadowBlur   = 6;
+                    recc.lineWidth    = 1.5;
+                    recc.beginPath();
+                    recc.moveTo(W * 0.05, y);
+                    recc.lineTo(W * (0.05 + line.width), y);
+                    recc.stroke();
+                    recc.fillStyle  = line.color;
+                    recc.shadowBlur = 8;
+                    recc.beginPath();
+                    recc.arc(W * 0.05, y, 2.5, 0, Math.PI * 2);
+                    recc.fill();
+                    recc.restore();
+                });
+                recc.save();
+                recc.globalAlpha = 0.15;
+                recc.strokeStyle = '#aa00ff';
+                recc.lineWidth   = 1;
+                recc.beginPath();
+                recc.moveTo(W * 0.05, 0);
+                recc.lineTo(W * 0.05, H);
+                recc.stroke();
+                recc.restore();
+            }
+            drawRecap();
+        }
+
+        // ── ARTISTS — spinning rings ──────────────────────────────────────
+        const artistCanvas = document.getElementById('artistCanvas');
+        if (artistCanvas) {
+            const ac = artistCanvas.getContext('2d');
+            function drawArtist() {
+                requestAnimationFrame(drawArtist);
+                const W = artistCanvas.offsetWidth;
+                const H = artistCanvas.offsetHeight;
+                if (!W || !H) return;
+                artistCanvas.width  = W;
+                artistCanvas.height = H;
+                ac.fillStyle = 'rgba(0,0,0,0.08)';
+                ac.fillRect(0, 0, W, H);
+                const time  = t();
+                const cx    = W / 2;
+                const cy    = H / 2;
+                const rings = [
+                    { r: Math.min(W,H)*0.12, color: '#ff0066', speed: 0.4,   dots: 4  },
+                    { r: Math.min(W,H)*0.22, color: '#ff00aa', speed: -0.3,  dots: 6  },
+                    { r: Math.min(W,H)*0.32, color: '#ff0033', speed: 0.2,   dots: 8  },
+                    { r: Math.min(W,H)*0.42, color: '#cc0044', speed: -0.15, dots: 10 },
+                ];
+                rings.forEach(ring => {
+                    ac.save();
+                    ac.globalAlpha  = 0.15;
+                    ac.strokeStyle  = ring.color;
+                    ac.lineWidth    = 1;
+                    ac.beginPath();
+                    ac.arc(cx, cy, ring.r, 0, Math.PI * 2);
+                    ac.stroke();
+                    ac.restore();
+                    for (let i = 0; i < ring.dots; i++) {
+                        const angle = (i / ring.dots) * Math.PI * 2 + time * ring.speed;
+                        const dx    = cx + Math.cos(angle) * ring.r;
+                        const dy    = cy + Math.sin(angle) * ring.r;
+                        ac.save();
+                        ac.fillStyle   = ring.color;
+                        ac.shadowColor = ring.color;
+                        ac.shadowBlur  = 10;
+                        ac.globalAlpha = 0.8;
+                        ac.beginPath();
+                        ac.arc(dx, dy, 2.5, 0, Math.PI * 2);
+                        ac.fill();
+                        ac.restore();
+                    }
+                });
+                ac.save();
+                ac.fillStyle   = '#ff0066';
+                ac.shadowColor = '#ff0066';
+                ac.shadowBlur  = 20;
+                ac.beginPath();
+                ac.arc(cx, cy, 5, 0, Math.PI * 2);
+                ac.fill();
+                ac.restore();
+            }
+            drawArtist();
+        }
+    </script>
 </body>
 </html>
