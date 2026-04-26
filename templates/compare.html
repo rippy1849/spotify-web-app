@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>COMPARE // RAVE FM</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Share Tech Mono', monospace; min-height: 100vh; background: #000; color: #fff; padding: 40px 20px; }
+        .scanlines { pointer-events: none; position: fixed; inset: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 4px); z-index: 10; }
+        .bg { position: fixed; inset: 0; background: radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%), #000; animation: bgshift 6s ease-in-out infinite alternate; z-index: 0; }
+        @keyframes bgshift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(180deg); } }
+        .content { position: relative; z-index: 5; max-width: 1100px; margin: 0 auto; }
+        h1 { font-family: 'Orbitron', sans-serif; font-size: 2.5rem; font-weight: 900; background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff); background-size: 300% 100%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: rainbowShift 4s linear infinite; filter: drop-shadow(0 0 12px #ff00ff); letter-spacing: 4px; margin-bottom: 8px; }
+        @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+        .subtitle { color: #00ffff; text-shadow: 0 0 8px #00ffff; letter-spacing: 4px; font-size: 0.75rem; margin-bottom: 40px; }
+        .nav { display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+        .nav a { color: #ff00aa; text-decoration: none; font-size: 0.75rem; letter-spacing: 2px; text-shadow: 0 0 8px #ff00aa; }
+        .nav a:hover { color: #fff; }
+        h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 4px; color: #ffff00; text-shadow: 0 0 10px #ffff0088; margin-bottom: 16px; border-bottom: 1px solid #ffff0033; padding-bottom: 8px; }
+
+        /* ── Selector ── */
+        .selector-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff44;
+            border-radius: 12px;
+            padding: 28px;
+            margin-bottom: 32px;
+            box-shadow: 0 0 30px #ff00ff22;
+        }
+
+        .selector-inner {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 20px;
+            align-items: end;
+        }
+
+        .selector-group label { display: block; font-size: 0.65rem; letter-spacing: 3px; color: #ff00aa; margin-bottom: 8px; }
+
+        .artist-search-wrap { position: relative; }
+
+        .artist-search {
+            width: 100%;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid #ff00ff44;
+            border-radius: 4px;
+            padding: 10px 14px;
+            color: #fff;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.82rem;
+            letter-spacing: 1px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .artist-search:focus { border-color: #ff00ff; box-shadow: 0 0 16px #ff00ff44; }
+        .artist-search::placeholder { color: #555; }
+
+        .search-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.95);
+            border: 1px solid #ff00ff33;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            max-height: 220px;
+            overflow-y: auto;
+            display: none;
+            z-index: 50;
+            box-shadow: 0 8px 24px #ff00ff22;
+        }
+
+        .search-dropdown.visible { display: block; }
+
+        .search-item {
+            padding: 9px 14px;
+            font-size: 0.78rem;
+            letter-spacing: 1px;
+            color: #ccc;
+            cursor: pointer;
+            border-bottom: 1px solid #ffffff08;
+            transition: background 0.15s;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .search-item:hover { background: #ff00ff22; color: #ff00ff; }
+        .search-item .play-count { font-size: 0.65rem; color: #555; }
+
+        .vs-badge {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 900;
+            color: #ff00ff;
+            text-shadow: 0 0 20px #ff00ff;
+            letter-spacing: 4px;
+            text-align: center;
+            padding-bottom: 10px;
+        }
+
+        .compare-btn {
+            width: 100%;
+            margin-top: 20px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+            letter-spacing: 3px;
+            padding: 14px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 700;
+            color: #000;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ff00ff);
+            background-size: 200%;
+            animation: btnShift 1.5s linear infinite;
+            box-shadow: 0 0 20px #ff00ff;
+        }
+
+        @keyframes btnShift { 0% { background-position: 0%; } 100% { background-position: 200%; } }
+
+        /* ── Artist headers ── */
+        .artist-headers {
+            display: grid;
+            grid-template-columns: 1fr 80px 1fr;
+            gap: 16px;
+            margin-bottom: 32px;
+            align-items: center;
+        }
+
+        .artist-header {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--color, #ff00ff)44;
+            border-radius: 12px;
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: 0 0 20px var(--color, #ff00ff)22;
+        }
+
+        .artist-header img {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            object-fit: cover;
+            border: 2px solid var(--color, #ff00ff)66;
+            flex-shrink: 0;
+        }
+
+        .artist-header .ah-placeholder {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            background: var(--color, #ff00ff)22;
+            border: 2px solid var(--color, #ff00ff)44;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .artist-header .ah-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            font-weight: 900;
+            color: var(--color, #ff00ff);
+            text-shadow: 0 0 10px var(--color, #ff00ff)88;
+            letter-spacing: 2px;
+        }
+
+        .artist-header .ah-sub { font-size: 0.65rem; color: #888; letter-spacing: 1px; margin-top: 4px; }
+
+        .vs-center {
+            text-align: center;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 900;
+            color: #ff00ff;
+            text-shadow: 0 0 20px #ff00ff;
+            letter-spacing: 4px;
+        }
+
+        /* ── Stat rows ── */
+        .stat-section { margin-bottom: 40px; }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: 1fr 160px 1fr;
+            gap: 8px;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #ffffff08;
+        }
+
+        .stat-row:hover { background: #ffffff04; }
+
+        .stat-val-1 {
+            text-align: right;
+            font-size: 0.85rem;
+            color: #ff00ff;
+            font-family: 'Orbitron', sans-serif;
+            padding-right: 12px;
+        }
+
+        .stat-val-2 {
+            text-align: left;
+            font-size: 0.85rem;
+            color: #00ffff;
+            font-family: 'Orbitron', sans-serif;
+            padding-left: 12px;
+        }
+
+        .stat-label {
+            text-align: center;
+            font-size: 0.62rem;
+            letter-spacing: 2px;
+            color: #888;
+            padding: 0 8px;
+        }
+
+        .stat-win-1 { color: #ff00ff; text-shadow: 0 0 8px #ff00ff44; }
+        .stat-win-2 { color: #00ffff; text-shadow: 0 0 8px #00ffff44; }
+        .stat-tie   { color: #ffff00; }
+
+        /* ── Bar comparison ── */
+        .bar-row {
+            display: grid;
+            grid-template-columns: 1fr 160px 1fr;
+            gap: 8px;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #ffffff08;
+        }
+
+        .bar-wrap-1 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .bar-wrap-2 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .bar-val { font-size: 0.75rem; color: #888; flex-shrink: 0; }
+
+        .bar-track {
+            flex: 1;
+            height: 8px;
+            background: #ffffff11;
+            border-radius: 99px;
+            overflow: hidden;
+        }
+
+        .bar-fill-1 {
+            height: 100%;
+            border-radius: 99px;
+            background: #ff00ff;
+            box-shadow: 0 0 6px #ff00ff88;
+            float: right;
+        }
+
+        .bar-fill-2 {
+            height: 100%;
+            border-radius: 99px;
+            background: #00ffff;
+            box-shadow: 0 0 6px #00ffff88;
+        }
+
+        /* ── Score cards ── */
+        .score-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+
+.info-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid #ffff0022;
+    border-radius: 10px;
+    margin-bottom: 40px;
+    overflow: hidden;
+}
+
+.info-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.info-header:hover { background: rgba(255,255,0,0.04); }
+
+.info-arrow {
+    color: #ffff0088;
+    font-size: 0.7rem;
+    transition: transform 0.3s;
+}
+
+.info-arrow.open { transform: rotate(180deg); }
+
+.info-body {
+    display: none;
+    padding: 20px;
+    border-top: 1px solid #ffff0022;
+}
+
+.info-body.open { display: block; }
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.info-dim {
+    background: rgba(255,255,255,0.02);
+    border-radius: 8px;
+    padding: 14px;
+}
+
+.info-dim-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+}
+
+.info-dim-desc {
+    font-size: 0.68rem;
+    color: #888;
+    letter-spacing: 0.5px;
+    line-height: 1.8;
+}
+
+        .score-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--color, #ff00ff)33;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .score-card .sc-label { font-size: 0.6rem; letter-spacing: 3px; color: #888; margin-bottom: 12px; }
+        .score-card .sc-vals  { display: flex; justify-content: space-around; align-items: center; }
+        .score-card .sc-val   { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; font-weight: 900; }
+        .score-card .sc-name  { font-size: 0.6rem; color: #888; letter-spacing: 1px; margin-top: 4px; }
+        .score-card .sc-vs    { font-size: 0.7rem; color: #555; letter-spacing: 2px; }
+
+        /* ── Graph distance ── */
+        .distance-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ffff0033;
+            border-radius: 12px;
+            padding: 28px;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .distance-number {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 4rem;
+            font-weight: 900;
+            color: #ffff00;
+            text-shadow: 0 0 30px #ffff00;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+
+        .distance-label { font-size: 0.7rem; letter-spacing: 4px; color: #ffff0088; margin-bottom: 24px; }
+
+        .connection-chain {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .chain-node {
+            background: rgba(255,255,0,0.1);
+            border: 1px solid #ffff0033;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 0.72rem;
+            color: #ffff00;
+            letter-spacing: 1px;
+        }
+
+        .chain-arrow { color: #ffff0066; font-size: 0.8rem; }
+
+        .connection-songs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 12px;
+        }
+
+        .song-pill {
+            background: rgba(255,255,0,0.08);
+            border: 1px solid #ffff0022;
+            border-radius: 99px;
+            padding: 4px 12px;
+            font-size: 0.65rem;
+            color: #ffff0088;
+            letter-spacing: 1px;
+        }
+
+        /* ── Charts ── */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .chart-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff22;
+            border-radius: 10px;
+            padding: 20px;
+            height: 260px;
+        }
+
+        .chart-card canvas { max-height: 220px; }
+
+        /* ── Mood badges ── */
+        .mood-pill {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 99px;
+            font-size: 0.65rem;
+            letter-spacing: 2px;
+            background: #ff00ff22;
+            border: 1px solid #ff00ff44;
+            color: #ff00ff;
+        }
+
+        .empty { color: #555; font-size: 0.8rem; letter-spacing: 2px; text-align: center; padding: 60px 0; }
+
+        .winner-badge {
+            display: inline-block;
+            font-size: 0.55rem;
+            letter-spacing: 2px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+
+        .winner-badge.w1 { background: #ff00ff22; color: #ff00ff; border: 1px solid #ff00ff44; }
+        .winner-badge.w2 { background: #00ffff22; color: #00ffff; border: 1px solid #00ffff44; }
+
+        @media (max-width: 700px) {
+            .selector-inner  { grid-template-columns: 1fr; }
+            .artist-headers  { grid-template-columns: 1fr; }
+            .vs-center       { display: none; }
+            .stat-row        { grid-template-columns: 1fr 120px 1fr; }
+            .charts-grid     { grid-template-columns: 1fr; }
+            .score-grid      { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/stats">◈ STATS</a>
+            <a href="/artist-graph">🕸 GRAPH</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+
+        <h1>COMPARE</h1>
+        <p class="subtitle">◈ ARTIST VS ARTIST ◈</p>
+
+        <!-- Selector -->
+        <div class="selector-card">
+            <form method="post" action="/compare">
+                <div class="selector-inner">
+                    <div class="selector-group">
+                        <label>ARTIST 1</label>
+                        <div class="artist-search-wrap">
+                            <input type="text" id="search1" class="artist-search"
+                                   placeholder="TYPE TO SEARCH..."
+                                   value="{{ artist1 or '' }}" autocomplete="off">
+                            <input type="hidden" name="artist1" id="artist1Val" value="{{ artist1 or '' }}">
+                            <div class="search-dropdown" id="dropdown1"></div>
+                        </div>
+                    </div>
+                    <div class="vs-badge">VS</div>
+                    <div class="selector-group">
+                        <label>ARTIST 2</label>
+                        <div class="artist-search-wrap">
+                            <input type="text" id="search2" class="artist-search"
+                                   placeholder="TYPE TO SEARCH..."
+                                   value="{{ artist2 or '' }}" autocomplete="off">
+                            <input type="hidden" name="artist2" id="artist2Val" value="{{ artist2 or '' }}">
+                            <div class="search-dropdown" id="dropdown2"></div>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="compare-btn">⚡ COMPARE</button>
+            </form>
+        </div>
+
+        {% if not stats1 and not artist1 %}
+            <p class="empty">// SELECT TWO ARTISTS TO COMPARE //</p>
+
+        {% elif stats1 and stats2 %}
+
+        <!-- Artist headers -->
+        <div class="artist-headers">
+            <div class="artist-header" style="--color:#ff00ff;">
+                {% if stats1.album_art %}
+                <img src="{{ stats1.album_art }}" alt="art">
+                {% else %}
+                <div class="ah-placeholder" style="--color:#ff00ff;">🎤</div>
+                {% endif %}
+                <div>
+                    <div class="ah-name" style="--color:#ff00ff;">{{ stats1.name }}</div>
+                    <div class="ah-sub">{{ stats1.total }} plays · {{ stats1.hours }}h</div>
+                </div>
+            </div>
+            <div class="vs-center">VS</div>
+            <div class="artist-header" style="--color:#00ffff;">
+                {% if stats2.album_art %}
+                <img src="{{ stats2.album_art }}" alt="art">
+                {% else %}
+                <div class="ah-placeholder" style="--color:#00ffff;">🎤</div>
+                {% endif %}
+                <div>
+                    <div class="ah-name" style="--color:#00ffff;">{{ stats2.name }}</div>
+                    <div class="ah-sub">{{ stats2.total }} plays · {{ stats2.hours }}h</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Graph distance -->
+        {% if graph_distance is not none %}
+        <div class="distance-card">
+            <div class="distance-number">{{ graph_distance }}</div>
+            <div class="distance-label">
+                {% if graph_distance == 1 %}DEGREE OF SEPARATION · DIRECTLY CONNECTED{% else %}DEGREES OF SEPARATION{% endif %}
+            </div>
+
+            {% if connecting_songs %}
+                {% if graph_distance == 1 %}
+                <div style="font-size:0.7rem; color:#888; letter-spacing:2px; margin-bottom:12px;">CONNECTED BY THESE TRACKS</div>
+                <div class="connection-songs">
+                    {% for song in connecting_songs %}
+                    <span class="song-pill">♦ {{ song }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div style="font-size:0.7rem; color:#888; letter-spacing:2px; margin-bottom:12px;">CONNECTION PATH</div>
+                {% for step in connecting_songs %}
+                <div class="connection-chain" style="margin-bottom:8px;">
+                    <span class="chain-node">{{ step.from }}</span>
+                    <span class="chain-arrow">→</span>
+                    <span class="chain-node">{{ step.to }}</span>
+                    <span style="font-size:0.62rem; color:#555; margin-left:8px;">
+                        via: {% for s in step.songs %}{{ s }}{% if not loop.last %}, {% endif %}{% endfor %}
+                    </span>
+                </div>
+                {% endfor %}
+                {% endif %}
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="distance-card">
+            <div class="distance-number" style="color:#555; text-shadow:none;">∞</div>
+            <div class="distance-label">NO CONNECTION FOUND IN YOUR HISTORY</div>
+        </div>
+        {% endif %}
+
+        <!-- Score cards -->
+        <div class="score-grid">
+            <div class="score-card" style="--color:#ff6600;">
+                <div class="sc-label">🔥 LOYALTY SCORE</div>
+                <div class="sc-vals">
+                    <div>
+                        <div class="sc-val" style="color:#ff00ff;">{{ stats1.loyalty }}</div>
+                        <div class="sc-name">{{ stats1.name }}</div>
+                    </div>
+                    <div class="sc-vs">VS</div>
+                    <div>
+                        <div class="sc-val" style="color:#00ffff;">{{ stats2.loyalty }}</div>
+                        <div class="sc-name">{{ stats2.name }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="score-card" style="--color:#aa00ff;">
+                <div class="sc-label">📅 CONSISTENCY %</div>
+                <div class="sc-vals">
+                    <div>
+                        <div class="sc-val" style="color:#ff00ff;">{{ stats1.consistency }}%</div>
+                        <div class="sc-name">{{ stats1.name }}</div>
+                    </div>
+                    <div class="sc-vs">VS</div>
+                    <div>
+                        <div class="sc-val" style="color:#00ffff;">{{ stats2.consistency }}%</div>
+                        <div class="sc-name">{{ stats2.name }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Score explanations -->
+<div class="info-card" id="infoCard">
+    <div class="info-header" onclick="toggleInfo()">
+        <span style="color:#ffff00; letter-spacing:3px; font-size:0.75rem;">◈ HOW SCORES ARE CALCULATED</span>
+        <span class="info-arrow" id="infoArrow">▼</span>
+    </div>
+    <div class="info-body" id="infoBody">
+        <div class="info-grid">
+            <div class="info-dim">
+                <div class="info-dim-title" style="color:#ff6600;">🔥 LOYALTY SCORE</div>
+                <div class="info-dim-desc">
+                    A score out of 100 measuring how devoted you are to an artist.<br><br>
+                    <strong style="color:#ff00ff;">40%</strong> — Completion rate (how often you finish their songs)<br>
+                    <strong style="color:#ff00ff;">30%</strong> — Total plays (capped at 100 plays = full marks)<br>
+                    <strong style="color:#ff00ff;">20%</strong> — Longest listening streak (capped at 30 days)<br>
+                    <strong style="color:#ff00ff;">10%</strong> — Active listening days (capped at 50 days)<br><br>
+                    A score of 100 means you listen constantly, never skip, and have long streaks.
+                </div>
+            </div>
+            <div class="info-dim">
+                <div class="info-dim-title" style="color:#aa00ff;">📅 CONSISTENCY %</div>
+                <div class="info-dim-desc">
+                    How regularly you listen to an artist relative to how long you've known them.<br><br>
+                    Calculated as: <strong style="color:#00ffff;">(active days ÷ days since first play) × 100</strong><br><br>
+                    A score of 100% means you listened on every single day since you first discovered them. 50% means you listened on half the days. Capped at 100%.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+        <!-- Core stats comparison -->
+        <div class="stat-section">
+            <h2>⚡ CORE STATS</h2>
+
+            {% set rows = [
+                ("TOTAL PLAYS",        stats1.total,        stats2.total,        "higher"),
+                ("TOTAL HOURS",        stats1.hours,        stats2.hours,        "higher"),
+                ("SKIP RATE",          stats1.skip_rate,    stats2.skip_rate,    "lower"),
+                ("COMPLETION RATE",    stats1.comp_rate,    stats2.comp_rate,    "higher"),
+                ("UNIQUE TRACKS",      stats1.unique_tracks,stats2.unique_tracks,"higher"),
+                ("UNIQUE ALBUMS",      stats1.unique_albums,stats2.unique_albums,"higher"),
+                ("AVG PROGRESS %",     stats1.avg_progress, stats2.avg_progress, "higher"),
+                ("ACTIVE DAYS",        stats1.active_days,  stats2.active_days,  "higher"),
+                ("PLAYS PER DAY",      stats1.plays_per_day,stats2.plays_per_day,"higher"),
+                ("LONGEST STREAK",     stats1.max_streak,   stats2.max_streak,   "higher"),
+                ("BINGE DAYS (5+)",    stats1.binge_days,   stats2.binge_days,   "higher"),
+                ("BEST DAY PLAYS",     stats1.busiest_day_count, stats2.busiest_day_count, "higher"),
+                ("COMEBACKS",          stats1.comebacks,    stats2.comebacks,    "higher"),
+                ("DAYS IN HISTORY",    stats1.days_since_first, stats2.days_since_first, "higher"),
+            ] %}
+
+            {% for label, v1, v2, better in rows %}
+            {% set max_val = [v1, v2] | max %}
+            {% set pct1 = (v1 / max_val * 100) | round | int if max_val > 0 else 0 %}
+            {% set pct2 = (v2 / max_val * 100) | round | int if max_val > 0 else 0 %}
+            {% set win1 = (v1 > v2 and better == "higher") or (v1 < v2 and better == "lower") %}
+            {% set win2 = (v2 > v1 and better == "higher") or (v2 < v1 and better == "lower") %}
+            <div class="bar-row">
+                <div class="bar-wrap-1">
+                    <span class="bar-val {% if win1 %}stat-win-1{% endif %}">{{ v1 }}</span>
+                    <div class="bar-track">
+                        <div class="bar-fill-1" style="width:{{ pct1 }}%; {% if win1 %}box-shadow:0 0 8px #ff00ff;{% endif %}"></div>
+                    </div>
+                </div>
+                <div class="stat-label">
+                    {{ label }}
+                    {% if win1 %}<span class="winner-badge w1">▲</span>{% endif %}
+                    {% if win2 %}<span class="winner-badge w2">▲</span>{% endif %}
+                </div>
+                <div class="bar-wrap-2">
+                    <div class="bar-track">
+                        <div class="bar-fill-2" style="width:{{ pct2 }}%; {% if win2 %}box-shadow:0 0 8px #00ffff;{% endif %}"></div>
+                    </div>
+                    <span class="bar-val {% if win2 %}stat-win-2{% endif %}">{{ v2 }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Personality stats -->
+        <div class="stat-section">
+            <h2>🎭 LISTENING PERSONALITY</h2>
+
+            {% set p_rows = [
+                ("🌙 NIGHT OWL %",    stats1.night_pct,   stats2.night_pct,   "none"),
+                ("🌅 MORNING %",      stats1.morning_pct, stats2.morning_pct, "none"),
+                ("📅 WEEKEND %",      stats1.weekend_pct, stats2.weekend_pct, "none"),
+                ("MOOD VARIETY",      stats1.mood_variety,stats2.mood_variety,"higher"),
+                ("GENRE VARIETY",     stats1.genre_variety,stats2.genre_variety,"higher"),
+            ] %}
+
+            {% for label, v1, v2, better in p_rows %}
+            {% set max_val = [v1, v2] | max %}
+            {% set pct1 = (v1 / max_val * 100) | round | int if max_val > 0 else 0 %}
+            {% set pct2 = (v2 / max_val * 100) | round | int if max_val > 0 else 0 %}
+            <div class="bar-row">
+                <div class="bar-wrap-1">
+                    <span class="bar-val">{{ v1 }}</span>
+                    <div class="bar-track"><div class="bar-fill-1" style="width:{{ pct1 }}%"></div></div>
+                </div>
+                <div class="stat-label">{{ label }}</div>
+                <div class="bar-wrap-2">
+                    <div class="bar-track"><div class="bar-fill-2" style="width:{{ pct2 }}%"></div></div>
+                    <span class="bar-val">{{ v2 }}</span>
+                </div>
+            </div>
+            {% endfor %}
+
+            <!-- Text stats -->
+            {% set t_rows = [
+                ("PEAK HOUR",     "%02d:00" | format(stats1.peak_hour) if stats1.peak_hour is not none else "—",
+                                  "%02d:00" | format(stats2.peak_hour) if stats2.peak_hour is not none else "—"),
+                ("PEAK DAY",      stats1.peak_dow or "—",      stats2.peak_dow or "—"),
+                ("DOMINANT MOOD", stats1.dominant_mood,         stats2.dominant_mood),
+                ("TOP GENRE",     stats1.top_genre or "—",      stats2.top_genre or "—"),
+                ("TOP ALBUM",     stats1.top_album or "—",      stats2.top_album or "—"),
+                ("FIRST PLAYED",  stats1.first_play,            stats2.first_play),
+                ("LAST PLAYED",   stats1.last_play,             stats2.last_play),
+                ("BUSIEST DAY",   stats1.busiest_day or "—",    stats2.busiest_day or "—"),
+            ] %}
+
+            {% for label, v1, v2 in t_rows %}
+            <div class="stat-row">
+                <div class="stat-val-1">{{ v1 }}</div>
+                <div class="stat-label">{{ label }}</div>
+                <div class="stat-val-2">{{ v2 }}</div>
+            </div>
+            {% endfor %}
+
+            <!-- Skip point -->
+            <div class="stat-row">
+                <div class="stat-val-1">
+                    {% if stats1.avg_skip_point %}{{ stats1.avg_skip_point }}%{% else %}—{% endif %}
+                </div>
+                <div class="stat-label">AVG SKIP POINT</div>
+                <div class="stat-val-2">
+                    {% if stats2.avg_skip_point %}{{ stats2.avg_skip_point }}%{% else %}—{% endif %}
+                </div>
+            </div>
+
+            <!-- Top tracks -->
+            <div class="stat-row">
+                <div class="stat-val-1" style="font-size:0.72rem;">
+                    {% if stats1.top_track %}{{ stats1.top_track[0] }} ({{ stats1.top_track[1] }}x){% else %}—{% endif %}
+                </div>
+                <div class="stat-label">TOP TRACK</div>
+                <div class="stat-val-2" style="font-size:0.72rem;">
+                    {% if stats2.top_track %}{{ stats2.top_track[0] }} ({{ stats2.top_track[1] }}x){% else %}—{% endif %}
+                </div>
+            </div>
+
+            <!-- Most skipped track -->
+            <div class="stat-row">
+                <div class="stat-val-1" style="font-size:0.72rem; color:#ff00aa;">
+                    {% if stats1.most_skipped_track %}{{ stats1.most_skipped_track[0] }} ({{ stats1.most_skipped_track[1] }}x){% else %}—{% endif %}
+                </div>
+                <div class="stat-label">MOST SKIPPED</div>
+                <div class="stat-val-2" style="font-size:0.72rem; color:#ff00aa;">
+                    {% if stats2.most_skipped_track %}{{ stats2.most_skipped_track[0] }} ({{ stats2.most_skipped_track[1] }}x){% else %}—{% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid">
+            <!-- Monthly trend -->
+            <div class="chart-card">
+                <canvas id="trendChart"></canvas>
+            </div>
+            <!-- Hour distribution -->
+            <div class="chart-card">
+                <canvas id="hourChart"></canvas>
+            </div>
+        </div>
+
+        {% else %}
+            <p class="empty">// NOT ENOUGH DATA FOR ONE OR BOTH ARTISTS //</p>
+        {% endif %}
+    </div>
+
+    {% if stats1 and stats2 %}
+    <script>
+        const tooltipDefaults = {
+            backgroundColor: '#111',
+            borderColor: '#ff00ff',
+            borderWidth: 1,
+            titleColor: '#00ffff',
+            bodyColor: '#fff',
+            titleFont: { family: 'Share Tech Mono' },
+            bodyFont:  { family: 'Share Tech Mono' },
+        };
+
+        // Monthly trend
+        const allMonths = [...new Set([
+            ...{{ stats1.monthly_labels | tojson }},
+            ...{{ stats2.monthly_labels | tojson }}
+        ])].sort();
+
+        const m1map = Object.fromEntries({{ stats1.monthly_labels | tojson }}.map((m,i) => [m, {{ stats1.monthly_values | tojson }}[i]]));
+        const m2map = Object.fromEntries({{ stats2.monthly_labels | tojson }}.map((m,i) => [m, {{ stats2.monthly_values | tojson }}[i]]));
+
+        new Chart(document.getElementById('trendChart'), {
+            type: 'line',
+            data: {
+                labels: allMonths,
+                datasets: [
+                    {
+                        label: '{{ stats1.name }}',
+                        data: allMonths.map(m => m1map[m] || 0),
+                        borderColor: '#ff00ff',
+                        backgroundColor: '#ff00ff22',
+                        tension: 0.4,
+                        fill: true,
+                        pointRadius: 3,
+                    },
+                    {
+                        label: '{{ stats2.name }}',
+                        data: allMonths.map(m => m2map[m] || 0),
+                        borderColor: '#00ffff',
+                        backgroundColor: '#00ffff22',
+                        tension: 0.4,
+                        fill: true,
+                        pointRadius: 3,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#fff', font: { family: 'Share Tech Mono', size: 9 }, padding: 12 } },
+                    title: { display: true, text: 'MONTHLY PLAY TREND', color: '#ffff00', font: { family: 'Orbitron', size: 10 }, padding: { bottom: 10 } },
+                    tooltip: tooltipDefaults,
+                },
+                scales: {
+                    x: { ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 8 }, maxRotation: 45 }, grid: { color: '#ffffff0a' } },
+                    y: { ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } }
+                }
+            }
+        });
+
+        // Hour distribution
+        const hours = Array.from({length:24}, (_,i) => `${String(i).padStart(2,'0')}:00`);
+        new Chart(document.getElementById('hourChart'), {
+            type: 'bar',
+            data: {
+                labels: hours,
+                datasets: [
+                    {
+                        label: '{{ stats1.name }}',
+                        data: {{ stats1.hour_dist | tojson }},
+                        backgroundColor: '#ff00ff66',
+                        borderColor: '#ff00ff',
+                        borderWidth: 1,
+                        borderRadius: 2,
+                    },
+                    {
+                        label: '{{ stats2.name }}',
+                        data: {{ stats2.hour_dist | tojson }},
+                        backgroundColor: '#00ffff66',
+                        borderColor: '#00ffff',
+                        borderWidth: 1,
+                        borderRadius: 2,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#fff', font: { family: 'Share Tech Mono', size: 9 }, padding: 12 } },
+                    title: { display: true, text: 'LISTENING BY HOUR', color: '#ffff00', font: { family: 'Orbitron', size: 10 }, padding: { bottom: 10 } },
+                    tooltip: tooltipDefaults,
+                },
+                scales: {
+                    x: { ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 7 }, maxRotation: 45 }, grid: { color: '#ffffff0a' } },
+                    y: { ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } }
+                }
+            }
+        });
+
+        function toggleInfo() {
+    const body  = document.getElementById('infoBody');
+    const arrow = document.getElementById('infoArrow');
+    body.classList.toggle('open');
+    arrow.classList.toggle('open');
+}
+    </script>
+    {% endif %}
+
+    <script>
+        const artists = JSON.parse('{{ eligible_artists | safe }}');
+
+        function makeSearch(inputId, dropdownId, hiddenId) {
+            const input    = document.getElementById(inputId);
+            const dropdown = document.getElementById(dropdownId);
+            const hidden   = document.getElementById(hiddenId);
+
+            function showResults(q) {
+                const matches = q.length === 0
+                    ? artists.slice(0, 12)
+                    : artists.filter(a => a.name.toLowerCase().includes(q.toLowerCase())).slice(0, 12);
+
+                dropdown.innerHTML = '';
+                if (matches.length === 0) { dropdown.classList.remove('visible'); return; }
+
+                matches.forEach(artist => {
+                    const item     = document.createElement('div');
+                    item.className = 'search-item';
+                    item.innerHTML = `${artist.name}<span class="play-count">${artist.plays} plays</span>`;
+                    item.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        input.value  = artist.name;
+                        hidden.value = artist.name;
+                        dropdown.classList.remove('visible');
+                    });
+                    dropdown.appendChild(item);
+                });
+
+                dropdown.classList.add('visible');
+            }
+
+            input.addEventListener('focus',  () => showResults(input.value));
+            input.addEventListener('input',  () => { hidden.value = input.value; showResults(input.value); });
+            input.addEventListener('blur',   () => { setTimeout(() => dropdown.classList.remove('visible'), 150); });
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') { dropdown.classList.remove('visible'); input.blur(); }
+            });
+        }
+
+        makeSearch('search1', 'dropdown1', 'artist1Val');
+        makeSearch('search2', 'dropdown2', 'artist2Val');
+    </script>
+</body>
+</html>

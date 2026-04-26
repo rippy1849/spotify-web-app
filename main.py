@@ -2289,3 +2289,326 @@ async def cleanup_bad_genres(db: AsyncSession = Depends(get_db)):
         "message": f"Updated {updated} tracks",
         "total_checked": len(plays),
     }
+
+@app.get("/compare", response_class=HTMLResponse)
+async def compare_artists(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    all_artists_q   = select(TrackPlay.artists)
+    all_artist_rows = (await db.execute(all_artists_q)).fetchall()
+    artist_counter  = Counter()
+    for row in all_artist_rows:
+        if row.artists:
+            for a in row.artists.split(","):
+                a = a.strip()
+                if a:
+                    artist_counter[a] += 1
+
+    eligible_artists = sorted(
+        [{"name": a, "plays": c} for a, c in artist_counter.items() if c >= 2],
+        key=lambda x: x["plays"],
+        reverse=True
+    )
+
+    import json
+    return templates.TemplateResponse("compare.html", {
+        "request":          request,
+        "eligible_artists": json.dumps(eligible_artists),
+    })
+
+
+@app.post("/compare", response_class=HTMLResponse)
+async def compare_artists_result(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    form    = await request.form()
+    artist1 = form.get("artist1", "").strip()
+    artist2 = form.get("artist2", "").strip()
+
+    all_artists_q   = select(TrackPlay.artists)
+    all_artist_rows = (await db.execute(all_artists_q)).fetchall()
+    artist_counter  = Counter()
+    for row in all_artist_rows:
+        if row.artists:
+            for a in row.artists.split(","):
+                a = a.strip()
+                if a:
+                    artist_counter[a] += 1
+
+    eligible_artists = sorted(
+        [{"name": a, "plays": c} for a, c in artist_counter.items() if c >= 2],
+        key=lambda x: x["plays"],
+        reverse=True
+    )
+
+    async def get_full_stats(artist_name: str) -> dict:
+        plays_q = (
+            select(TrackPlay)
+            .where(TrackPlay.artists.ilike(f"%{artist_name}%"))
+            .order_by(TrackPlay.listened_at.asc())
+        )
+        plays = (await db.execute(plays_q)).scalars().fetchall()
+
+        # Filter to only plays where artist is actually listed
+        plays = [
+            p for p in plays
+            if any(a.strip().lower() == artist_name.lower()
+                   for a in (p.artists or "").split(","))
+        ]
+
+        if not plays:
+            return None
+
+        total      = len(plays)
+        skips      = sum(1 for p in plays if p.was_skipped)
+        completes  = total - skips
+        skip_rate  = round(skips / total * 100, 1) if total else 0
+        comp_rate  = round(completes / total * 100, 1) if total else 0
+        minutes    = round(sum(p.progress_ms for p in plays) / 60000, 1)
+        hours      = round(minutes / 60, 2)
+
+        # Streak
+        days_with  = sorted(set(p.listened_at.date() for p in plays))
+        max_streak = temp = 1
+        for i in range(1, len(days_with)):
+            if (days_with[i] - days_with[i-1]).days == 1:
+                temp += 1
+                max_streak = max(max_streak, temp)
+            else:
+                temp = 1
+
+        # Peak hour
+        hour_counter = Counter(p.hour_of_day for p in plays if p.hour_of_day is not None)
+        peak_hour    = hour_counter.most_common(1)[0][0] if hour_counter else None
+        peak_hour_count = hour_counter.most_common(1)[0][1] if hour_counter else 0
+
+        # Peak day
+        dow_counter  = Counter(p.day_of_week for p in plays if p.day_of_week)
+        peak_dow     = dow_counter.most_common(1)[0][0] if dow_counter else None
+        peak_dow_count = dow_counter.most_common(1)[0][1] if dow_counter else 0
+
+        # Mood
+        mood_counter  = Counter(p.auto_mood for p in plays if p.auto_mood and p.auto_mood != "UNKNOWN")
+        dominant_mood = mood_counter.most_common(1)[0][0] if mood_counter else "UNKNOWN"
+        mood_variety  = len(mood_counter)
+
+        # Genre
+        genre_counter = Counter()
+        for p in plays:
+            if p.primary_genre:
+                for g in p.primary_genre.split(","):
+                    g = g.strip().lower()
+                    if g:
+                        genre_counter[g] += 1
+        top_genre    = genre_counter.most_common(1)[0][0] if genre_counter else None
+        genre_variety = len(genre_counter)
+
+        # Track stats
+        track_plays  = Counter(p.track_name for p in plays)
+        track_skips  = Counter(p.track_name for p in plays if p.was_skipped)
+        top_track    = track_plays.most_common(1)[0] if track_plays else None
+        unique_tracks = len(track_plays)
+
+        # Most skipped track
+        most_skipped_track = track_skips.most_common(1)[0] if track_skips else None
+
+        # Avg progress
+        avg_progress = round(sum(p.progress_pct or 0 for p in plays) / total, 1) if total else 0
+
+        # First and last play
+        first_play = plays[0]
+        last_play  = plays[-1]
+
+        # Days since first play
+        from datetime import date as date_type
+        days_since_first = (datetime.now(TIMEZONE).date() - first_play.listened_at.date()).days
+
+        # Active days
+        active_days = len(days_with)
+
+        # Plays per active day
+        plays_per_day = round(total / active_days, 2) if active_days else 0
+
+        # Binge sessions — days with 5+ plays
+        day_plays = Counter(p.listened_at.strftime("%Y-%m-%d") for p in plays)
+        binge_days = sum(1 for c in day_plays.values() if c >= 5)
+
+        # Most played in one day
+        busiest_day     = day_plays.most_common(1)[0] if day_plays else None
+        busiest_day_count = busiest_day[1] if busiest_day else 0
+
+        # Albums
+        album_counter = Counter(p.album for p in plays if p.album)
+        top_album     = album_counter.most_common(1)[0] if album_counter else None
+        unique_albums = len(album_counter)
+
+        # Loyalty score — custom formula
+        # High plays + low skip rate + long streak = high loyalty
+        loyalty = round(
+            (comp_rate * 0.4) +
+            (min(total, 100) / 100 * 30) +
+            (min(max_streak, 30) / 30 * 20) +
+            (min(active_days, 50) / 50 * 10),
+            1
+        )
+
+        # Consistency — how regularly you listen (active days / days since first)
+        consistency = min(100.0, round(active_days / max(days_since_first, 1) * 100, 1)) if days_since_first > 0 else 100
+
+        # Night owl score — % of plays between midnight and 4am
+        night_plays  = sum(1 for p in plays if p.hour_of_day is not None and 0 <= p.hour_of_day < 4)
+        night_pct    = round(night_plays / total * 100, 1) if total else 0
+
+        # Morning person score
+        morning_plays = sum(1 for p in plays if p.hour_of_day is not None and 5 <= p.hour_of_day < 10)
+        morning_pct   = round(morning_plays / total * 100, 1) if total else 0
+
+        # Weekend vs weekday
+        weekend_plays = sum(1 for p in plays if p.day_of_week in ["Saturday", "Sunday"])
+        weekend_pct   = round(weekend_plays / total * 100, 1) if total else 0
+
+        # Skip early vs late — avg skip point
+        skip_plays    = [p for p in plays if p.was_skipped]
+        avg_skip_point = round(sum(p.progress_pct or 0 for p in skip_plays) / len(skip_plays), 1) if skip_plays else None
+
+        # Comeback score — listened to after a gap of 7+ days
+        comebacks = 0
+        for i in range(1, len(days_with)):
+            if (days_with[i] - days_with[i-1]).days >= 7:
+                comebacks += 1
+
+        # Album art for display
+        album_art = next((p.album_art_url for p in reversed(plays) if p.album_art_url), None)
+
+        # Monthly trend — plays per month
+        monthly = Counter(p.listened_at.strftime("%Y-%m") for p in plays)
+        sorted_months  = sorted(monthly.keys())
+        monthly_labels = sorted_months
+        monthly_values = [monthly[m] for m in sorted_months]
+
+        # Hour distribution
+        hour_dist = [hour_counter.get(h, 0) for h in range(24)]
+
+        return {
+            "name":              artist_name,
+            "total":             total,
+            "skips":             skips,
+            "completes":         completes,
+            "skip_rate":         skip_rate,
+            "comp_rate":         comp_rate,
+            "minutes":           minutes,
+            "hours":             hours,
+            "max_streak":        max_streak,
+            "peak_hour":         peak_hour,
+            "peak_hour_count":   peak_hour_count,
+            "peak_dow":          peak_dow,
+            "peak_dow_count":    peak_dow_count,
+            "dominant_mood":     dominant_mood,
+            "mood_variety":      mood_variety,
+            "top_genre":         top_genre,
+            "genre_variety":     genre_variety,
+            "top_track":         top_track,
+            "unique_tracks":     unique_tracks,
+            "most_skipped_track": most_skipped_track,
+            "avg_progress":      avg_progress,
+            "avg_skip_point":    avg_skip_point,
+            "first_play":        first_play.listened_at.strftime("%Y-%m-%d"),
+            "last_play":         last_play.listened_at.strftime("%Y-%m-%d"),
+            "days_since_first":  days_since_first,
+            "active_days":       active_days,
+            "plays_per_day":     plays_per_day,
+            "binge_days":        binge_days,
+            "busiest_day":       busiest_day[0] if busiest_day else None,
+            "busiest_day_count": busiest_day_count,
+            "top_album":         top_album[0] if top_album else None,
+            "unique_albums":     unique_albums,
+            "loyalty":           loyalty,
+            "consistency":       consistency,
+            "night_pct":         night_pct,
+            "morning_pct":       morning_pct,
+            "weekend_pct":       weekend_pct,
+            "comebacks":         comebacks,
+            "album_art":         album_art,
+            "monthly_labels":    monthly_labels,
+            "monthly_values":    monthly_values,
+            "hour_dist":         hour_dist,
+            "mood_counts":       dict(mood_counter.most_common(6)),
+        }
+
+    stats1 = await get_full_stats(artist1)
+    stats2 = await get_full_stats(artist2)
+
+    # ── Graph distance ────────────────────────────────────────────────────
+    graph_distance  = None
+    connecting_songs = []
+
+    if stats1 and stats2:
+        # Build adjacency from shared tracks
+        all_plays_q = (
+            select(TrackPlay.track_name, TrackPlay.artists)
+            .where(TrackPlay.artists.like("%,%"))
+            .group_by(TrackPlay.track_id)
+        )
+        all_plays   = (await db.execute(all_plays_q)).fetchall()
+
+        from itertools import combinations
+        adjacency = defaultdict(set)
+        edge_songs = defaultdict(set)
+
+        for play in all_plays:
+            artists = [a.strip() for a in play.artists.split(",") if a.strip()]
+            if len(artists) > 1:
+                for a1, a2 in combinations(sorted(artists), 2):
+                    adjacency[a1].add(a2)
+                    adjacency[a2].add(a1)
+                    edge_songs[(a1, a2)].add(play.track_name)
+                    edge_songs[(a2, a1)].add(play.track_name)
+
+        # Direct connection
+        if artist2 in adjacency.get(artist1, set()):
+            graph_distance   = 1
+            key              = tuple(sorted([artist1, artist2]))
+            connecting_songs = list(edge_songs.get(key, edge_songs.get((artist1, artist2), set())))
+
+        else:
+            # BFS to find shortest path
+            from collections import deque
+            queue   = deque([(artist1, [artist1])])
+            visited = {artist1}
+            found   = False
+
+            while queue and not found:
+                current, path = queue.popleft()
+                for neighbor in adjacency.get(current, set()):
+                    if neighbor == artist2:
+                        graph_distance = len(path)
+                        found          = True
+                        # Build the connection chain
+                        full_path = path + [artist2]
+                        for i in range(len(full_path) - 1):
+                            a, b     = full_path[i], full_path[i+1]
+                            key      = tuple(sorted([a, b]))
+                            songs    = list(edge_songs.get(key, edge_songs.get((a, b), set())))
+                            connecting_songs.append({
+                                "from":  a,
+                                "to":    b,
+                                "songs": songs[:3],
+                            })
+                        break
+                    if neighbor not in visited:
+                        visited.add(neighbor)
+                        queue.append((neighbor, path + [neighbor]))
+
+    import json
+    return templates.TemplateResponse("compare.html", {
+        "request":          request,
+        "eligible_artists": json.dumps(eligible_artists),
+        "artist1":          artist1,
+        "artist2":          artist2,
+        "stats1":           stats1,
+        "stats2":           stats2,
+        "graph_distance":   graph_distance,
+        "connecting_songs": connecting_songs,
+    })

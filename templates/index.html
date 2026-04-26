@@ -423,17 +423,17 @@
                 <div class="card-desc">Interactive artist connection map with photos</div>
             </a>
 
-            <!-- RECAP -->
-            <a href="/recap" class="mag-card card-d" style="--color:#aa00ff;">
-                <div class="card-bg">
-                    <canvas id="recapCanvas"></canvas>
-                    <div class="overlay"></div>
-                </div>
-                <div class="card-icon">📋</div>
-                <div class="card-category">DAILY</div>
-                <div class="card-title">RECAP</div>
-                <div class="card-desc">Today's full listening summary</div>
-            </a>
+            <!-- RECAP — move to small grid, add COMPARE as main card -->
+<a href="/compare" class="mag-card card-d" style="--color:#aa00ff;">
+    <div class="card-bg">
+        <canvas id="compareCanvas"></canvas>
+        <div class="overlay"></div>
+    </div>
+    <div class="card-icon">⚔️</div>
+    <div class="card-category">VERSUS</div>
+    <div class="card-title">COMPARE</div>
+    <div class="card-desc">Head to head artist stats with graph distance</div>
+</a>
 
             <!-- ARTISTS -->
             <a href="/artist-search" class="mag-card card-e" style="--color:#ff0066;">
@@ -512,7 +512,15 @@
                 <span class="s-label">SEARCH</span>
                 <span class="s-desc">your history</span>
             </a>
+
+                   <a href="/recap" class="small-card" style="--color:#aa00ff;">
+    <span class="s-icon">📋</span>
+    <span class="s-label">RECAP</span>
+    <span class="s-desc">today's summary</span>
+</a>
         </div>
+
+ 
 
         <div class="logout-row">
             <a href="/logout">⏏ DISCONNECT</a>
@@ -778,6 +786,79 @@
             }
             drawRecap();
         }
+
+        // ── COMPARE — two opposing particle streams ───────────────────────────
+const compareCanvas = document.getElementById('compareCanvas');
+if (compareCanvas) {
+    const cc = compareCanvas.getContext('2d');
+    const stream1 = Array.from({length: 20}, () => ({
+        x: Math.random() * 0.45,
+        y: Math.random(),
+        vx: 0.002 + Math.random() * 0.003,
+        vy: (Math.random() - 0.5) * 0.001,
+        r: 1.5 + Math.random() * 2.5,
+    }));
+    const stream2 = Array.from({length: 20}, () => ({
+        x: 0.55 + Math.random() * 0.45,
+        y: Math.random(),
+        vx: -(0.002 + Math.random() * 0.003),
+        vy: (Math.random() - 0.5) * 0.001,
+        r: 1.5 + Math.random() * 2.5,
+    }));
+
+    function drawCompare() {
+        requestAnimationFrame(drawCompare);
+        const W = compareCanvas.offsetWidth;
+        const H = compareCanvas.offsetHeight;
+        if (!W || !H) return;
+        compareCanvas.width  = W;
+        compareCanvas.height = H;
+        cc.fillStyle = 'rgba(0,0,0,0.08)';
+        cc.fillRect(0, 0, W, H);
+
+        // Center dividing line
+        cc.save();
+        cc.globalAlpha  = 0.15;
+        cc.strokeStyle  = '#aa00ff';
+        cc.lineWidth    = 1;
+        cc.setLineDash([4, 4]);
+        cc.beginPath();
+        cc.moveTo(W/2, 0);
+        cc.lineTo(W/2, H);
+        cc.stroke();
+        cc.setLineDash([]);
+        cc.restore();
+
+        stream1.forEach(p => {
+            p.x += p.vx; p.y += p.vy;
+            if (p.x > 0.48) { p.x = 0; p.y = Math.random(); }
+            if (p.y < 0 || p.y > 1) p.vy *= -1;
+            cc.save();
+            cc.fillStyle   = '#ff00ff';
+            cc.shadowColor = '#ff00ff';
+            cc.shadowBlur  = 8;
+            cc.beginPath();
+            cc.arc(p.x * W, p.y * H, p.r, 0, Math.PI * 2);
+            cc.fill();
+            cc.restore();
+        });
+
+        stream2.forEach(p => {
+            p.x += p.vx; p.y += p.vy;
+            if (p.x < 0.52) { p.x = 1; p.y = Math.random(); }
+            if (p.y < 0 || p.y > 1) p.vy *= -1;
+            cc.save();
+            cc.fillStyle   = '#00ffff';
+            cc.shadowColor = '#00ffff';
+            cc.shadowBlur  = 8;
+            cc.beginPath();
+            cc.arc(p.x * W, p.y * H, p.r, 0, Math.PI * 2);
+            cc.fill();
+            cc.restore();
+        });
+    }
+    drawCompare();
+}
 
         // ── ARTISTS — spinning rings ──────────────────────────────────────
         const artistCanvas = document.getElementById('artistCanvas');
