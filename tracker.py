@@ -1,9 +1,9 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from collections import Counter
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from models import TrackPlay, ArtistCache
-from collections import Counter
 
 TIMEZONE       = ZoneInfo("America/New_York")
 SKIP_THRESHOLD = 0.80
@@ -23,20 +23,110 @@ current_track_state = {
 
 _last_commit_key = {"key": None}
 
+# ── Non-music filter ──────────────────────────────────────────────────────────
+NON_MUSIC_GENRES = {
+    "white noise", "brown noise", "pink noise", "green noise", "blue noise",
+    "nature sounds", "nature", "ambient noise", "sleep sounds", "rain sounds",
+    "sleep", "meditation", "healing", "binaural", "binaural beats", "asmr",
+    "spa", "yoga", "relaxation", "study sounds", "focus sounds",
+    "soundscape", "field recording", "nature ambient",
+}
+
+NON_MUSIC_KEYWORDS = [
+    "white noise", "brown noise", "pink noise", "green noise", "blue noise",
+    "black noise", "grey noise", "violet noise", "red noise",
+    "rain sounds", "rain noise", "rainfall", "thunder sounds",
+    "ocean waves", "wave sounds", "ocean sounds", "beach sounds",
+    "forest sounds", "nature sounds", "bird sounds", "birdsong",
+    "sleep sounds", "sleep music", "sleeping sounds",
+    "meditation music", "meditation sounds", "guided meditation",
+    "binaural beats", "binaural",
+    "asmr", "whisper",
+    "fan noise", "air conditioner", "vacuum cleaner",
+    "fireplace sounds", "crackling fire",
+    "waterfall sounds", "stream sounds",
+    "delta waves", "theta waves", "alpha waves",
+    "528 hz", "432 hz", "174 hz", "396 hz", "417 hz", "639 hz", "741 hz", "852 hz",
+    "solfeggio", "frequency",
+    "lofi hip hop radio", "lo-fi hip hop radio",
+    "study with me", "focus music",
+]
+
+# Genres implausible for electronic/hip hop artists when combined with those genres
+IMPLAUSIBLE_GENRE_COMBOS = {
+    "heavy metal", "death metal", "black metal", "thrash metal",
+    "grindcore", "metalcore", "deathcore", "doom metal",
+    "classical", "orchestra", "symphony",
+    "country", "bluegrass", "gospel",
+    "flamenco", "polka",
+}
 
 
+def is_non_music(track_name: str, genre_str: str) -> bool:
+    """Return True if this track appears to be non-music content."""
+    if not track_name:
+        return False
+
+    track_lower = track_name.lower().strip()
+    genre_lower = (genre_str or "").lower()
+
+    for keyword in NON_MUSIC_KEYWORDS:
+        if keyword in track_lower:
+            return True
+
+    if genre_lower:
+        for genre in genre_lower.split(","):
+            genre = genre.strip()
+            if genre in NON_MUSIC_GENRES:
+                return True
+
+    return False
+
+
+def filter_implausible_genres(genres: list) -> list:
+    """Remove genres that are implausible given the other genres present."""
+    if not genres:
+        return genres
+
+    genres_lower = [g.lower().strip() for g in genres]
+
+    electronic_indicators = {
+        "electronic", "edm", "dubstep", "drum and bass", "dnb",
+        "hip hop", "rap", "trap", "house", "techno", "bass music",
+        "glitch hop", "glitch-hop", "funk", "future bass", "chillhop",
+        "trance", "breaks", "breakbeat", "jungle", "garage",
+    }
+
+    is_electronic = any(
+        any(ind in g for ind in electronic_indicators)
+        for g in genres_lower
+    )
+
+    if is_electronic:
+        filtered = [
+            g for g in genres
+            if g.lower().strip() not in IMPLAUSIBLE_GENRE_COMBOS
+        ]
+        print(f"[FILTER] is_electronic=True. Before: {genres} After: {filtered}")
+        if filtered:
+            return filtered
+
+    return genres
+
+
+# ── Mood derivation ───────────────────────────────────────────────────────────
 def derive_mood_from_genre(genre_str: str) -> str:
+    """Derive mood from a comma-separated string of genre tags."""
     if not genre_str:
         return "UNKNOWN"
 
     genres = [g.strip().lower() for g in genre_str.split(",") if g.strip()]
 
     def matches(genre: str, terms: list) -> bool:
+        import re
         for term in terms:
             if genre == term:
                 return True
-            # Only match whole words
-            import re
             if re.search(r'\b' + re.escape(term) + r'\b', genre):
                 return True
         return False
@@ -218,20 +308,17 @@ def derive_mood_from_genre(genre_str: str) -> str:
         ],
     }
 
-    # Count how many genres match each mood
     mood_votes = Counter()
     for genre in genres:
         for mood, terms in mood_map.items():
             if matches(genre, terms):
                 mood_votes[mood] += 1
-                break  # each genre only votes once
+                break
 
     if not mood_votes:
         return "NEUTRAL"
 
-    # Return the mood with the most votes
     return mood_votes.most_common(1)[0][0]
-
 
 
 def update_state(track: dict):
@@ -262,6 +349,7 @@ def was_skipped(progress_ms: int, duration_ms: int) -> bool:
 async def get_or_fetch_genre(artist_name: str, artist_id: str,
                               db: AsyncSession, access_token: str,
                               track_name: str = None) -> str | None:
+    print(f"[GENRE] ========== Fetching genre for: {artist_name} / {track_name} ==========")
     import httpx
     import urllib.parse
     import os
@@ -309,6 +397,7 @@ async def get_or_fetch_genre(artist_name: str, artist_id: str,
 
     async def cache_and_return(genres: list, label: str) -> str | None:
         deduped   = dedup_genres(genres)
+        deduped   = filter_implausible_genres(deduped)
         genre_str = ", ".join(deduped)
         print(f"[GENRE] {label} for {artist_name} - {track_name}: {genre_str}")
         entry = ArtistCache(
@@ -372,6 +461,7 @@ async def get_or_fetch_genre(artist_name: str, artist_id: str,
                             release_data = release_resp.json()
                             styles       = release_data.get("styles", []) + release_data.get("genres", [])
                             valid_styles = [s for s in styles if is_valid_genre(s)]
+                            valid_styles = filter_implausible_genres(valid_styles)
                             if valid_styles:
                                 all_genres.extend(valid_styles)
                                 print(f"[GENRE] Discogs track styles for {track_name}: {valid_styles}")
@@ -380,6 +470,7 @@ async def get_or_fetch_genre(artist_name: str, artist_id: str,
 
     # ── Early exit if track-specific genres found ─────────────────────────────
     if len(all_genres) >= 1:
+        print(f"[GENRE] All genres before cache (track-specific): {all_genres}")
         return await cache_and_return(all_genres, "Track-specific genres found")
 
     print(f"[GENRE] No track-specific genres, falling back to artist level")
@@ -416,33 +507,96 @@ async def get_or_fetch_genre(artist_name: str, artist_id: str,
                     headers=headers,
                 )
             if search_resp.status_code == 200:
-                results           = search_resp.json().get("results", [])
-                discogs_artist_id = None
-                for r in results[:3]:
-                    if r.get("title", "").lower() == artist_name.lower():
-                        discogs_artist_id = r["id"]
-                        break
-                if not discogs_artist_id and results:
-                    discogs_artist_id = results[0]["id"]
+                results = search_resp.json().get("results", [])
 
-                if discogs_artist_id:
+                # Collect all candidates whose base name matches
+                candidates = []
+                for r in results[:10]:
+                    title = r.get("title", "").strip()
+                    base  = title.split("(")[0].strip().lower()
+                    if base == artist_name.lower():
+                        candidates.append(r)
+
+                # Score each candidate
+                best_id    = None
+                best_score = -1
+
+                known_genres_lower = set(g.lower() for g in all_genres)
+
+                electronic_keywords = [
+                    "electronic", "funk", "jazz", "hip hop", "saxophone",
+                    "producer", "edm", "bass", "musician", "dj", "beat",
+                    "remix", "synthesizer", "keyboard", "turntable",
+                    "drum", "sample", "mix", "dance", "club",
+                ]
+
+                for candidate in candidates:
+                    try:
+                        async with httpx.AsyncClient(timeout=5.0) as client:
+                            profile_resp = await client.get(
+                                f"https://api.discogs.com/artists/{candidate['id']}",
+                                headers=headers,
+                            )
+                        if profile_resp.status_code != 200:
+                            continue
+
+                        profile      = profile_resp.json()
+                        profile_text = (profile.get("profile") or "").lower()
+                        score        = 0
+
+                        for kw in electronic_keywords:
+                            if kw in profile_text:
+                                score += 1
+
+                        if candidate["title"].lower() == artist_name.lower():
+                            score += 5
+
+                        if candidate.get("thumb"):
+                            score += 2
+
+                        async with httpx.AsyncClient(timeout=5.0) as client:
+                            releases_check = await client.get(
+                                f"https://api.discogs.com/artists/{candidate['id']}/releases"
+                                f"?per_page=5&sort=year&sort_order=desc",
+                                headers=headers,
+                            )
+                        if releases_check.status_code == 200:
+                            rel_data = releases_check.json().get("releases", [])
+                            for rel in rel_data:
+                                if rel.get("role") == "Main":
+                                    score += 3
+                                    break
+
+                        print(f"[GENRE] Discogs candidate: {candidate['title']} (id:{candidate['id']}) score:{score}")
+
+                        if score > best_score:
+                            best_score = score
+                            best_id    = candidate["id"]
+
+                    except Exception as e:
+                        print(f"[GENRE] Discogs candidate check error: {e}")
+                        continue
+
+                if best_id and best_score >= 3:
                     async with httpx.AsyncClient(timeout=8.0) as client:
                         releases_resp = await client.get(
-                            f"https://api.discogs.com/artists/{discogs_artist_id}/releases"
-                            f"?per_page=10&sort=year&sort_order=desc",
+                            f"https://api.discogs.com/artists/{best_id}/releases"
+                            f"?per_page=20&sort=year&sort_order=desc",
                             headers=headers,
                         )
                     if releases_resp.status_code == 200:
-                        releases   = releases_resp.json().get("releases", [])
-                        master_id  = None
-                        release_id = None
-                        for r in releases:
-                            if r.get("type") == "master" and r.get("role") == "Main":
+                        releases      = releases_resp.json().get("releases", [])
+                        main_releases = [r for r in releases if r.get("role") == "Main"]
+                        master_id     = None
+                        release_id    = None
+
+                        for r in main_releases:
+                            if r.get("type") == "master":
                                 master_id = r["id"]
                                 break
                         if not master_id:
-                            for r in releases:
-                                if r.get("role") == "Main" and r.get("type") == "release":
+                            for r in main_releases:
+                                if r.get("type") == "release":
                                     release_id = r["id"]
                                     break
 
@@ -467,8 +621,13 @@ async def get_or_fetch_genre(artist_name: str, artist_id: str,
                                 styles       = release_data.get("styles", []) + release_data.get("genres", [])
 
                         valid_styles = [s for s in styles if is_valid_genre(s)]
-                        all_genres.extend(valid_styles)
-                        print(f"[GENRE] Discogs artist for {artist_name}: {valid_styles}")
+                        valid_styles = filter_implausible_genres(valid_styles)
+                        if valid_styles:
+                            all_genres.extend(valid_styles)
+                            print(f"[GENRE] Discogs artist for {artist_name} (id:{best_id} score:{best_score}): {valid_styles}")
+                else:
+                    print(f"[GENRE] Discogs no confident match for {artist_name} (best score: {best_score}) — skipping")
+
         except Exception as e:
             print(f"[GENRE] Discogs artist error: {e}")
 
@@ -483,15 +642,38 @@ async def get_or_fetch_genre(artist_name: str, artist_id: str,
         if mb_response.status_code == 200:
             artists = mb_response.json().get("artists", [])
             if artists:
-                tags    = artists[0].get("tags", [])
-                tags    = sorted(tags, key=lambda x: x.get("count", 0), reverse=True)
-                genres  = [t["name"] for t in tags if is_valid_genre(t["name"])][:8]
-                all_genres.extend(genres)
-                print(f"[GENRE] MusicBrainz for {artist_name}: {genres}")
+                mb_artist      = artists[0]
+                mb_name        = mb_artist.get("name", "").strip()
+                mb_score       = mb_artist.get("score", 0)
+                name_matches   = mb_name.lower() == artist_name.lower()
+                high_confidence = mb_score >= 90
+
+                if not name_matches:
+                    print(f"[MB] Name mismatch: searching '{artist_name}' got '{mb_name}' — skipping")
+                elif not high_confidence:
+                    print(f"[MB] Low confidence {mb_score} for '{mb_name}' — skipping")
+                else:
+                    print(f"[MB] Found artist: {mb_name} (score:{mb_score})")
+                    tags    = mb_artist.get("tags", [])
+                    tags    = sorted(tags, key=lambda x: x.get("count", 0), reverse=True)
+                    print(f"[MB] Raw tags: {[(t['name'], t.get('count',0)) for t in tags[:10]]}")
+                    genres  = [t["name"] for t in tags if is_valid_genre(t["name"])][:8]
+
+                    # Filter using combined context so electronic artists
+                    # don't get implausible tags from wrong matches
+                    combined   = list(set(all_genres + genres))
+                    filtered   = filter_implausible_genres(combined)
+                    new_genres = [
+                        g for g in genres
+                        if g.lower().strip() in {f.lower().strip() for f in filtered}
+                    ]
+                    print(f"[MB] After filter: {new_genres}")
+                    all_genres.extend(new_genres)
     except Exception as e:
         print(f"[GENRE] MusicBrainz error: {e}")
 
     if all_genres:
+        print(f"[GENRE] Final all_genres before cache: {all_genres}")
         return await cache_and_return(all_genres, "Final merged genres")
 
     entry = ArtistCache(
@@ -522,30 +704,42 @@ async def commit_previous_track(db: AsyncSession):
         return
     _last_commit_key["key"] = commit_key
 
+    # ── Filter out non-music content ──────────────────────────────────────────
+    if is_non_music(state.get("track_name", ""), state.get("primary_genre", "")):
+        print(f"[TRACKER] Skipping non-music track: {state.get('track_name')}")
+        return
+
     now            = datetime.now(TIMEZONE)
     progress_pct   = round(state["progress_ms"] / state["duration_ms"] * 100, 2)
-    skipped        = was_skipped(state["progress_ms"], state["duration_ms"])
     primary_artist = state["artists"].split(",")[0].strip() if state["artists"] else None
 
+    # ── Round up near-complete plays to 100% ──────────────────────────────────
+    if progress_pct >= 95:
+        progress_pct = 100.0
+        progress_ms  = state["duration_ms"]
+    else:
+        progress_ms  = state["progress_ms"]
+
+    skipped   = was_skipped(progress_ms, state["duration_ms"])
     auto_mood = derive_mood_from_genre(state.get("primary_genre"))
 
     play = TrackPlay(
-        track_id         = state["track_id"],
-        track_name       = state["track_name"],
-        artists          = state["artists"],
-        primary_artist   = primary_artist,
-        album            = state["album"],
-        album_art_url    = state["album_art_url"],
-        duration_ms      = state["duration_ms"],
-        progress_ms      = state["progress_ms"],
-        was_skipped      = skipped,
-        listened_at      = now,
-        progress_pct     = progress_pct,
-        hour_of_day      = now.hour,
-        day_of_week      = now.strftime("%A"),
-        month            = now.strftime("%B"),
-        auto_mood        = auto_mood,
-        primary_genre    = state.get("primary_genre"),
+        track_id          = state["track_id"],
+        track_name        = state["track_name"],
+        artists           = state["artists"],
+        primary_artist    = primary_artist,
+        album             = state["album"],
+        album_art_url     = state["album_art_url"],
+        duration_ms       = state["duration_ms"],
+        progress_ms       = progress_ms,
+        was_skipped       = skipped,
+        listened_at       = now,
+        progress_pct      = progress_pct,
+        hour_of_day       = now.hour,
+        day_of_week       = now.strftime("%A"),
+        month             = now.strftime("%B"),
+        auto_mood         = auto_mood,
+        primary_genre     = state.get("primary_genre"),
         artist_spotify_id = state.get("artist_id"),
     )
 

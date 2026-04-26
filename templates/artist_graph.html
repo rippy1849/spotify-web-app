@@ -54,15 +54,7 @@
         }
 
         .nav.visible { opacity: 1; }
-
-        .nav a {
-            color: #ff00aa88;
-            text-decoration: none;
-            font-size: 0.72rem;
-            letter-spacing: 2px;
-            transition: color 0.2s;
-        }
-
+        .nav a { color: #ff00aa88; text-decoration: none; font-size: 0.72rem; letter-spacing: 2px; transition: color 0.2s; }
         .nav a:hover { color: #fff; }
 
         .title-box {
@@ -90,19 +82,10 @@
             letter-spacing: 4px;
         }
 
-        @keyframes rainbowShift {
-            0%   { background-position: 0% 50%; }
-            100% { background-position: 300% 50%; }
-        }
+        @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
 
-        .title-box .sub {
-            font-size: 0.65rem;
-            color: #00ffff88;
-            letter-spacing: 3px;
-            margin-top: 4px;
-        }
+        .title-box .sub { font-size: 0.65rem; color: #00ffff88; letter-spacing: 3px; margin-top: 4px; }
 
-        /* ── Tooltip ── */
         .tooltip {
             position: fixed;
             background: rgba(0,0,0,0.92);
@@ -118,34 +101,10 @@
             max-width: 260px;
         }
 
-        .tooltip .tt-artists {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.75rem;
-            color: #ff00ff;
-            margin-bottom: 8px;
-            letter-spacing: 1px;
-        }
-
-        .tooltip .tt-count {
-            color: #00ffff;
-            margin-bottom: 6px;
-            font-size: 0.68rem;
-        }
-
-        .tooltip .tt-track {
-            color: #ffff00;
-            font-size: 0.65rem;
-            margin-bottom: 2px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .tooltip .tt-more {
-            color: #555;
-            font-size: 0.62rem;
-            margin-top: 4px;
-        }
+        .tooltip .tt-artists { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: #ff00ff; margin-bottom: 8px; letter-spacing: 1px; }
+        .tooltip .tt-count   { color: #00ffff; margin-bottom: 6px; font-size: 0.68rem; }
+        .tooltip .tt-track   { color: #ffff00; font-size: 0.65rem; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tooltip .tt-more    { color: #555; font-size: 0.62rem; margin-top: 4px; }
 
         .node-tooltip {
             position: fixed;
@@ -161,16 +120,9 @@
             box-shadow: 0 0 20px #00ffff44;
         }
 
-        .node-tooltip .nt-name {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.8rem;
-            color: #00ffff;
-            margin-bottom: 4px;
-        }
-
+        .node-tooltip .nt-name  { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; color: #00ffff; margin-bottom: 4px; }
         .node-tooltip .nt-plays { color: #ff00aa; font-size: 0.65rem; }
 
-        /* ── Search box — always visible ── */
         .search-box {
             position: fixed;
             top: 20px;
@@ -195,11 +147,7 @@
             transition: border-color 0.2s, box-shadow 0.2s;
         }
 
-        .search-box input:focus {
-            border-color: #ff00ff;
-            box-shadow: 0 0 16px #ff00ff44;
-        }
-
+        .search-box input:focus { border-color: #ff00ff; box-shadow: 0 0 16px #ff00ff44; }
         .search-box input::placeholder { color: #555; }
 
         .search-results {
@@ -225,7 +173,6 @@
         .search-result-item:hover { background: #ff00ff22; color: #ff00ff; }
         .search-result-item:visited { color: #ccc; }
 
-        /* ── Controls ── */
         .controls {
             position: fixed;
             bottom: 24px;
@@ -234,6 +181,8 @@
             z-index: 20;
             display: flex;
             gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
             opacity: 0;
             transition: opacity 0.3s;
         }
@@ -253,13 +202,7 @@
             transition: all 0.2s;
         }
 
-        .ctrl-btn:hover {
-            border-color: #ff00ff;
-            color: #ff00ff;
-            background: rgba(255,0,255,0.1);
-        }
-
-        .ctrl-btn.active {
+        .ctrl-btn:hover, .ctrl-btn.active {
             border-color: #ff00ff;
             color: #ff00ff;
             background: rgba(255,0,255,0.1);
@@ -299,13 +242,7 @@
             letter-spacing: 4px;
         }
 
-        .empty p {
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 0.75rem;
-            color: #555;
-            letter-spacing: 2px;
-            margin-top: 12px;
-        }
+        .empty p { font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; color: #555; letter-spacing: 2px; margin-top: 12px; }
     </style>
 </head>
 <body>
@@ -344,14 +281,13 @@
         <div class="nt-plays" id="nt-plays"></div>
     </div>
 
-    <!-- Search box — always visible -->
     <div class="search-box" id="searchBox">
         <input type="text" id="artistSearch" placeholder="SEARCH ARTIST..." autocomplete="off">
         <div class="search-results" id="searchResults"></div>
     </div>
 
     <div class="stats-bar" id="statsBar">
-        <span>DRAG <strong>nodes</strong> to pin · DOUBLE-CLICK to unpin</span>
+        <span>DRAG <strong>nodes</strong></span>
         <span>SCROLL to <strong>zoom</strong></span>
         <span>HOVER <strong>lines</strong> for shared tracks</span>
     </div>
@@ -360,6 +296,7 @@
         <button class="ctrl-btn active" id="btnReset">↺ RESET VIEW</button>
         <button class="ctrl-btn active" id="btnFreeze">❄ FREEZE</button>
         <button class="ctrl-btn" id="btnCharge">⚡ SPREAD</button>
+        <button class="ctrl-btn active" id="btnClusterColor">🎨 CLUSTER COLORS</button>
     </div>
 
     <script>
@@ -368,16 +305,13 @@
         const tooltip   = document.getElementById('tooltip');
         const nodeTip   = document.getElementById('nodeTooltip');
 
-        // ── Mouse idle — search box stays visible always ───────────────────
+        // ── Mouse idle ────────────────────────────────────────────────────────
         let mouseTimer = null;
         const uiEls    = ['nav','titleBox','statsBar','controls'].map(id => document.getElementById(id));
-
         document.addEventListener('mousemove', () => {
             uiEls.forEach(el => el.classList.add('visible'));
             clearTimeout(mouseTimer);
-            mouseTimer = setTimeout(() => {
-                uiEls.forEach(el => el.classList.remove('visible'));
-            }, 3000);
+            mouseTimer = setTimeout(() => uiEls.forEach(el => el.classList.remove('visible')), 3000);
         });
 
         // ── SVG setup ─────────────────────────────────────────────────────────
@@ -403,72 +337,165 @@
 
         graphData.nodes.forEach((node, i) => {
             const r = nodeRadius(node);
-
-            defs.append('clipPath')
-                .attr('id', `clip-${i}`)
-                .append('circle')
-                .attr('r', r);
-
+            defs.append('clipPath').attr('id', `clip-${i}`).append('circle').attr('r', r);
             if (node.image) {
                 defs.append('pattern')
-                    .attr('id',           `img-${i}`)
+                    .attr('id', `img-${i}`)
                     .attr('patternUnits', 'objectBoundingBox')
-                    .attr('width',        1)
-                    .attr('height',       1)
+                    .attr('width', 1).attr('height', 1)
                     .append('image')
-                    .attr('href',   node.image)
-                    .attr('width',  r * 2)
-                    .attr('height', r * 2)
-                    .attr('x',      0)
-                    .attr('y',      0)
+                    .attr('href', node.image)
+                    .attr('width', r * 2).attr('height', r * 2)
+                    .attr('x', 0).attr('y', 0)
                     .attr('preserveAspectRatio', 'xMidYMid slice');
             }
         });
 
         function nodeRadius(node) {
-            const base = 22;
-            const max  = 52;
+            const base = 22, max = 52;
             const maxP = Math.max(...graphData.nodes.map(n => n.plays));
             return base + (node.plays / maxP) * (max - base);
         }
 
-        function linkWidth(link) {
-            return Math.max(1.5, Math.min(link.count * 2.5, 14));
+        function linkWidth(link) { return Math.max(1.5, Math.min(link.count * 2.5, 14)); }
+
+        // ── Detect clusters ───────────────────────────────────────────────────
+        const clusterMap = {};
+        const visited    = new Set();
+
+        function getCluster(nodeId, clusterId) {
+            if (visited.has(nodeId)) return;
+            visited.add(nodeId);
+            clusterMap[nodeId] = clusterId;
+            graphData.links.forEach(l => {
+                const srcId = typeof l.source === 'object' ? l.source.id : l.source;
+                const tgtId = typeof l.target === 'object' ? l.target.id : l.target;
+                if (srcId === nodeId) getCluster(tgtId, clusterId);
+                if (tgtId === nodeId) getCluster(srcId, clusterId);
+            });
+        }
+
+        let clusterId = 0;
+        graphData.nodes.forEach(n => { if (!visited.has(n.id)) getCluster(n.id, clusterId++); });
+        const totalClusters = clusterId;
+        console.log(`[GRAPH] Detected ${totalClusters} clusters`);
+
+        // ── Assign cluster colors ─────────────────────────────────────────────
+        let clusterColorEnabled = true;
+        const clusterNeon = [
+            '#ff00ff','#00ffff','#ffff00','#00ff88',
+            '#ff00aa','#ff6600','#aa00ff','#00aaff',
+            '#ff0066','#00ff44','#ffaa00','#0088ff',
+        ];
+        const clusterColors = {};
+        [...new Set(Object.values(clusterMap))].forEach((cid, idx) => {
+            clusterColors[cid] = clusterNeon[idx % clusterNeon.length];
+        });
+
+        // ── Pre-position clusters in grid ─────────────────────────────────────
+        if (totalClusters > 1) {
+            const cols  = Math.ceil(Math.sqrt(totalClusters));
+            const cellW = W / cols;
+            const cellH = H / Math.ceil(totalClusters / cols);
+
+            const clusterNodes = {};
+            graphData.nodes.forEach(n => {
+                const cid = clusterMap[n.id];
+                if (!clusterNodes[cid]) clusterNodes[cid] = [];
+                clusterNodes[cid].push(n);
+            });
+
+            Object.entries(clusterNodes).forEach(([cid, nodes], idx) => {
+                const col = idx % cols;
+                const row = Math.floor(idx / cols);
+                const cx  = cellW * col + cellW / 2;
+                const cy  = cellH * row + cellH / 2;
+                nodes.forEach(n => {
+                    n.x  = cx + (Math.random() - 0.5) * cellW * 0.4;
+                    n.y  = cy + (Math.random() - 0.5) * cellH * 0.4;
+                    n.fx = null;
+                    n.fy = null;
+                });
+            });
+        }
+
+        // ── Custom cluster separation force ───────────────────────────────────
+        function forceClusterSeparation() {
+            const strength = 0.15;
+            const minDist  = 300;
+
+            return function(alpha) {
+                const centers = {}, counts = {};
+                graphData.nodes.forEach(n => {
+                    const cid = clusterMap[n.id];
+                    if (!centers[cid]) { centers[cid] = {x:0,y:0}; counts[cid] = 0; }
+                    centers[cid].x += n.x;
+                    centers[cid].y += n.y;
+                    counts[cid]++;
+                });
+                Object.keys(centers).forEach(cid => {
+                    centers[cid].x /= counts[cid];
+                    centers[cid].y /= counts[cid];
+                });
+
+                const ids = Object.keys(centers);
+                for (let i = 0; i < ids.length; i++) {
+                    for (let j = i + 1; j < ids.length; j++) {
+                        const ci   = centers[ids[i]], cj = centers[ids[j]];
+                        const dx   = ci.x - cj.x, dy = ci.y - cj.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+                        if (dist < minDist) {
+                            const force = (minDist - dist) / dist * strength * alpha;
+                            const fx    = dx * force, fy = dy * force;
+                            const total = counts[ids[i]] + counts[ids[j]];
+                            graphData.nodes.forEach(n => {
+                                if (clusterMap[n.id] == ids[i]) { n.vx += fx*(counts[ids[j]]/total); n.vy += fy*(counts[ids[j]]/total); }
+                                if (clusterMap[n.id] == ids[j]) { n.vx -= fx*(counts[ids[i]]/total); n.vy -= fy*(counts[ids[i]]/total); }
+                            });
+                        }
+                    }
+                }
+            };
         }
 
         // ── Simulation ────────────────────────────────────────────────────────
         const simulation = d3.forceSimulation(graphData.nodes)
-            .force('link',      d3.forceLink(graphData.links).id(d => d.id).distance(150).strength(0.5))
-            .force('charge',    d3.forceManyBody().strength(-300).distanceMax(400))
-            .force('center',    d3.forceCenter(W / 2, H / 2).strength(0.05))
-            .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 15))
-            .alphaDecay(0.02)
-            .velocityDecay(0.4);
+            .force('link',      d3.forceLink(graphData.links).id(d => d.id).distance(160).strength(0.5))
+            .force('charge',    d3.forceManyBody().strength(-500).distanceMax(600))
+            .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 35).strength(1.0))
+            .force('cluster',   forceClusterSeparation())
+            .force('x',         d3.forceX(W / 2).strength(0.02))
+            .force('y',         d3.forceY(H / 2).strength(0.02))
+            .alphaDecay(0.015)
+            .velocityDecay(0.35);
 
         // ── Links ─────────────────────────────────────────────────────────────
         const link = g.append('g')
             .selectAll('line')
             .data(graphData.links)
             .join('line')
-            .attr('stroke',         (d, i) => neon[i % neon.length])
+            .attr('stroke', (d, i) => {
+                if (clusterColorEnabled) {
+                    const srcId = typeof d.source === 'object' ? d.source.id : d.source;
+                    return clusterColors[clusterMap[srcId]] || neon[i % neon.length];
+                }
+                return neon[i % neon.length];
+            })
             .attr('stroke-width',   d => linkWidth(d))
             .attr('stroke-opacity', 0.5)
             .style('cursor', 'pointer')
             .on('mousemove', (event, d) => {
                 document.getElementById('tt-artists').textContent = `${d.source.id} × ${d.target.id}`;
                 document.getElementById('tt-count').textContent   = `${d.count} shared track${d.count > 1 ? 's' : ''}`;
-
                 const trackEl = document.getElementById('tt-tracks');
                 trackEl.innerHTML = '';
                 d.tracks.slice(0, 5).forEach(t => {
-                    const div       = document.createElement('div');
+                    const div = document.createElement('div');
                     div.className   = 'tt-track';
                     div.textContent = `♦ ${t}`;
                     trackEl.appendChild(div);
                 });
-
                 document.getElementById('tt-more').textContent = d.tracks.length > 5 ? `+${d.tracks.length - 5} more` : '';
-
                 tooltip.style.display = 'block';
                 tooltip.style.left    = (event.clientX + 14) + 'px';
                 tooltip.style.top     = (event.clientY - 10) + 'px';
@@ -493,11 +520,13 @@
                 .on('end',   dragEnd)
             );
 
-        // Glow ring
+        // Glow ring — cluster color when enabled
         node.append('circle')
             .attr('r',                d => nodeRadius(d) + 5)
             .attr('fill',             'none')
-            .attr('stroke',           (d, i) => neon[i % neon.length])
+            .attr('stroke',           (d, i) => clusterColorEnabled
+                ? clusterColors[clusterMap[d.id]] || neon[i % neon.length]
+                : neon[i % neon.length])
             .attr('stroke-width',     d => d.connected ? 1.5 : 0.8)
             .attr('opacity',          d => d.connected ? 0.5 : 0.2)
             .attr('filter',           'url(#glow)')
@@ -507,42 +536,38 @@
         node.each(function(d, i) {
             const n = d3.select(this);
             const r = nodeRadius(d);
-
             if (d.image) {
                 n.append('circle')
-                    .attr('r',            r)
-                    .attr('fill',         `url(#img-${i})`)
-                    .attr('stroke',       neon[i % neon.length])
+                    .attr('r', r)
+                    .attr('fill', `url(#img-${i})`)
+                    .attr('stroke', clusterColorEnabled ? clusterColors[clusterMap[d.id]] || neon[i % neon.length] : neon[i % neon.length])
                     .attr('stroke-width', 2);
             } else {
                 n.append('circle')
-                    .attr('r',            r)
-                    .attr('fill',         neon[i % neon.length] + '33')
-                    .attr('stroke',       neon[i % neon.length])
+                    .attr('r', r)
+                    .attr('fill', (clusterColorEnabled ? clusterColors[clusterMap[d.id]] : neon[i % neon.length]) + '33')
+                    .attr('stroke', clusterColorEnabled ? clusterColors[clusterMap[d.id]] || neon[i % neon.length] : neon[i % neon.length])
                     .attr('stroke-width', 2);
-
                 n.append('text')
-                    .attr('text-anchor',       'middle')
-                    .attr('dominant-baseline', 'middle')
-                    .attr('fill',              '#fff')
-                    .attr('font-size',         Math.max(10, r * 0.4))
-                    .attr('font-family',       'Share Tech Mono')
+                    .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
+                    .attr('fill', '#fff').attr('font-size', Math.max(10, r * 0.4))
+                    .attr('font-family', 'Share Tech Mono')
                     .text(d.id.slice(0, 2).toUpperCase());
             }
         });
 
         // Name label
         node.append('text')
-            .attr('text-anchor',       'middle')
-            .attr('dominant-baseline', 'middle')
-            .attr('y',                 d => nodeRadius(d) + 14)
-            .attr('fill',              (d, i) => neon[i % neon.length])
-            .attr('font-size',         10)
-            .attr('font-family',       'Share Tech Mono')
-            .attr('letter-spacing',    1)
+            .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
+            .attr('y', d => nodeRadius(d) + 14)
+            .attr('fill', (d, i) => clusterColorEnabled
+                ? clusterColors[clusterMap[d.id]] || neon[i % neon.length]
+                : neon[i % neon.length])
+            .attr('font-size', 10).attr('font-family', 'Share Tech Mono')
+            .attr('letter-spacing', 1)
             .text(d => d.id);
 
-        // Node hover
+        // Hover
         node.on('mousemove', (event, d) => {
             document.getElementById('nt-name').textContent  = d.id;
             document.getElementById('nt-plays').textContent = `${d.plays} plays in history`;
@@ -555,19 +580,15 @@
         // Double click to unpin
         node.on('dblclick', (event, d) => {
             event.stopPropagation();
-            d.fx = null;
-            d.fy = null;
+            d.fx = null; d.fy = null;
             simulation.alpha(0.1).restart();
         });
 
         // ── Tick ──────────────────────────────────────────────────────────────
         simulation.on('tick', () => {
             link
-                .attr('x1', d => d.source.x)
-                .attr('y1', d => d.source.y)
-                .attr('x2', d => d.target.x)
-                .attr('y2', d => d.target.y);
-
+                .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
             node.attr('transform', d => `translate(${d.x},${d.y})`);
         });
 
@@ -575,8 +596,7 @@
         function dragStart(event, d) {
             event.sourceEvent.stopPropagation();
             if (!event.active) simulation.alphaTarget(0.05).restart();
-            d.fx = d.x;
-            d.fy = d.y;
+            d.fx = d.x; d.fy = d.y;
             d3.select(this).style('cursor', 'grabbing');
         }
 
@@ -588,8 +608,7 @@
 
         function dragEnd(event, d) {
             if (!event.active) simulation.alphaTarget(0);
-            d.fx = d.x;
-            d.fy = d.y;
+            d.fx = d.x; d.fy = d.y;
             d3.select(this).style('cursor', 'grab');
         }
 
@@ -622,12 +641,46 @@
                 simulation.force('collision').radius(d => nodeRadius(d) + 40);
                 document.getElementById('btnCharge').textContent = '🔗 TIGHTEN';
             } else {
-                simulation.force('link').distance(150).strength(0.5);
-                simulation.force('charge').strength(-300).distanceMax(400);
-                simulation.force('collision').radius(d => nodeRadius(d) + 15);
+                simulation.force('link').distance(160).strength(0.5);
+                simulation.force('charge').strength(-500).distanceMax(600);
+                simulation.force('collision').radius(d => nodeRadius(d) + 35);
                 document.getElementById('btnCharge').textContent = '⚡ SPREAD';
             }
             simulation.alpha(0.3).alphaTarget(0).restart();
+        });
+
+        // ── Cluster color toggle ──────────────────────────────────────────────
+        document.getElementById('btnClusterColor').addEventListener('click', () => {
+            clusterColorEnabled = !clusterColorEnabled;
+            const btn = document.getElementById('btnClusterColor');
+            btn.classList.toggle('active', clusterColorEnabled);
+
+            // Update link colors
+            link.attr('stroke', (d, i) => {
+                if (clusterColorEnabled) {
+                    const srcId = typeof d.source === 'object' ? d.source.id : d.source;
+                    return clusterColors[clusterMap[srcId]] || neon[i % neon.length];
+                }
+                return neon[i % neon.length];
+            });
+
+            // Update glow rings
+            node.select('circle:first-child')
+                .attr('stroke', (d, i) => clusterColorEnabled
+                    ? clusterColors[clusterMap[d.id]] || neon[i % neon.length]
+                    : neon[i % neon.length]);
+
+            // Update image/fallback circle strokes
+            node.select('circle:nth-child(2)')
+                .attr('stroke', (d, i) => clusterColorEnabled
+                    ? clusterColors[clusterMap[d.id]] || neon[i % neon.length]
+                    : neon[i % neon.length]);
+
+            // Update name labels
+            node.selectAll('text')
+                .attr('fill', (d, i) => clusterColorEnabled
+                    ? clusterColors[clusterMap[d.id]] || neon[i % neon.length]
+                    : neon[i % neon.length]);
         });
 
         // ── Search ────────────────────────────────────────────────────────────
@@ -639,25 +692,12 @@
         searchInput.addEventListener('input', () => {
             const q = searchInput.value.trim().toLowerCase();
             searchResults.innerHTML = '';
-
-            if (!q) {
-                searchResults.style.display = 'none';
-                clearHighlight();
-                return;
-            }
-
-            const matches = artistNames
-                .filter(name => name.toLowerCase().includes(q))
-                .slice(0, 8);
-
-            if (matches.length === 0) {
-                searchResults.style.display = 'none';
-                return;
-            }
-
+            if (!q) { searchResults.style.display = 'none'; clearHighlight(); return; }
+            const matches = artistNames.filter(name => name.toLowerCase().includes(q)).slice(0, 8);
+            if (matches.length === 0) { searchResults.style.display = 'none'; return; }
             searchResults.style.display = 'block';
             matches.forEach(name => {
-                const item       = document.createElement('div');
+                const item = document.createElement('div');
                 item.className   = 'search-result-item';
                 item.textContent = name;
                 item.addEventListener('click', () => {
@@ -671,94 +711,56 @@
         });
 
         searchInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                searchInput.value           = '';
-                searchResults.style.display = 'none';
-                clearHighlight();
-            }
+            if (e.key === 'Escape') { searchInput.value = ''; searchResults.style.display = 'none'; clearHighlight(); }
             if (e.key === 'Enter') {
                 const q     = searchInput.value.trim().toLowerCase();
-                const match = artistNames.find(n => n.toLowerCase() === q)
-                           || artistNames.find(n => n.toLowerCase().includes(q));
-                if (match) {
-                    searchResults.style.display = 'none';
-                    clearHighlight();
-                    focusArtist(match);
-                }
+                const match = artistNames.find(n => n.toLowerCase() === q) || artistNames.find(n => n.toLowerCase().includes(q));
+                if (match) { searchResults.style.display = 'none'; clearHighlight(); focusArtist(match); }
             }
         });
 
         document.addEventListener('click', (e) => {
-            if (!e.target.closest('#searchBox')) {
-                searchResults.style.display = 'none';
-            }
+            if (!e.target.closest('#searchBox')) searchResults.style.display = 'none';
         });
 
         function focusArtist(name) {
-    const target = graphData.nodes.find(n => n.id === name);
-    if (!target) return;
-
-    clearHighlight();
-    highlightedNode = name;
-
-    node.each(function(d) {
-        const el = d3.select(this);
-        if (d.id === name) {
-            el.attr('opacity', 1);
-            el.select('circle:first-child')
-                .attr('stroke-width', 4)
-                .attr('opacity', 1);
-            el.selectAll('text')
-                .attr('fill',      '#ffff00')
-                .attr('font-size', 13);
-        } else {
-            el.attr('opacity', 0.25);
+            const target = graphData.nodes.find(n => n.id === name);
+            if (!target) return;
+            clearHighlight();
+            highlightedNode = name;
+            node.each(function(d) {
+                const el = d3.select(this);
+                if (d.id === name) {
+                    el.attr('opacity', 1);
+                    el.select('circle:first-child').attr('stroke-width', 4).attr('opacity', 1);
+                    el.selectAll('text').attr('fill', '#ffff00').attr('font-size', 13);
+                } else {
+                    el.attr('opacity', 0.25);
+                }
+            });
+            link.attr('opacity', d => (d.source.id === name || d.target.id === name) ? 1 : 0.05);
+            if (target.x && target.y) {
+                const scale = 1.8;
+                svg.transition().duration(600).call(
+                    zoom.transform,
+                    d3.zoomIdentity.translate(W/2 - target.x*scale, H/2 - target.y*scale).scale(scale)
+                );
+            }
         }
-    });
-
-    link.attr('opacity', d =>
-        (d.source.id === name || d.target.id === name) ? 1 : 0.05
-    );
-
-    if (target.x && target.y) {
-        const scale = 1.8;
-        const tx    = W / 2 - target.x * scale;
-        const ty    = H / 2 - target.y * scale;
-        svg.transition().duration(600).call(
-            zoom.transform,
-            d3.zoomIdentity.translate(tx, ty).scale(scale)
-        );
-    }
-}
 
         function clearHighlight() {
-    highlightedNode = null;
-
-    // Reset node group opacity
-    node.attr('opacity', 1);
-
-    // Reset all circles inside each node
-    node.selectAll('circle')
-        .attr('stroke-width', function(d, i) {
-            // Restore original stroke width based on circle type
-            // First circle is glow ring, second is image/fallback
-            return null;
-        })
-        .attr('opacity', null);
-
-    // Reset text
-    node.selectAll('text')
-        .attr('fill',      (d, i) => neon[i % neon.length])
-        .attr('font-size', 10);
-
-    // Reset links
-    link.attr('opacity', 1);
-
-    // Re-apply original glow ring styles
-    node.select('circle:first-child')
-        .attr('stroke-width', d => d.connected ? 1.5 : 0.8)
-        .attr('opacity',      d => d.connected ? 0.5 : 0.2);
-}
+            highlightedNode = null;
+            node.attr('opacity', 1);
+            node.select('circle:first-child')
+                .attr('stroke-width', d => d.connected ? 1.5 : 0.8)
+                .attr('opacity',      d => d.connected ? 0.5 : 0.2);
+            node.selectAll('text')
+                .attr('fill', (d, i) => clusterColorEnabled
+                    ? clusterColors[clusterMap[d.id]] || neon[i % neon.length]
+                    : neon[i % neon.length])
+                .attr('font-size', 10);
+            link.attr('opacity', 1);
+        }
 
         svg.on('click', (event) => {
             if (event.target === svg.node()) {

@@ -871,7 +871,9 @@ function initState(keepOrbs = false) {
             const time=t(), cx=W/2, cy=H/2;
             for (let i=20;i>=0;i--) {
                 const progress=i/20, r=progress*Math.max(W,H)*0.7, twist=time*1.5+i*0.2;
-                const hue=20+progress*30, color=`hsl(${hue},100%,${30+progress*30}%)`;
+                const color = (autoColorEnabled && albumArtColors)
+    ? theme.colors[Math.floor(progress * theme.colors.length) % theme.colors.length]
+    : `hsl(${20 + progress * 30},100%,${30 + progress * 30}%)`;
                 ctx.save(); ctx.beginPath();
                 for (let s=0;s<=4;s++) {
                     const angle=(s/4)*Math.PI*2+twist;
@@ -888,7 +890,10 @@ function initState(keepOrbs = false) {
             }
             for (let i=-8;i<=8;i++) { ctx.strokeStyle=theme.colors[1]+'44'; ctx.beginPath(); ctx.moveTo(cx+i*50,H*0.6); ctx.lineTo(cx+i*400,H); ctx.stroke(); }
             ctx.restore();
-            ctx.save(); ctx.globalAlpha=0.04; ctx.fillStyle='#ff4400'; ctx.fillRect(Math.sin(time*2)*4,0,W,H); ctx.fillStyle='#0044ff'; ctx.fillRect(-Math.sin(time*2)*4,0,W,H); ctx.restore();
+            ctx.save(); ctx.globalAlpha=0.04; ctx.fillStyle = (autoColorEnabled && albumArtColors) ? theme.colors[0] : '#ff4400';
+ctx.fillRect(Math.sin(time*2)*4,0,W,H);
+ctx.fillStyle = (autoColorEnabled && albumArtColors) ? theme.colors[1] || theme.colors[0] : '#0044ff';
+ctx.fillRect(-Math.sin(time*2)*4,0,W,H); ctx.restore();
             ctx.save(); ctx.globalAlpha=0.06; for (let y=0;y<H;y+=3) { ctx.fillStyle='#000'; ctx.fillRect(0,y,W,1); } ctx.restore();
             if (Math.random()<0.04) { ctx.save(); ctx.globalAlpha=0.25; ctx.fillStyle=theme.colors[2]; ctx.fillRect(0,Math.random()*H,W*Math.random()*0.6,1+Math.random()*4); ctx.restore(); }
             particles.forEach(p => {

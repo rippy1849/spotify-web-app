@@ -150,12 +150,12 @@
         }
 
         .chart-card {
-            background: rgba(255,255,255,0.03);
-            border: 1px solid #ff00ff22;
-            border-radius: 10px;
-            padding: 20px;
-            position: relative;
-        }
+    background: rgba(255,255,255,0.03);
+    border: 1px solid #ff00ff22;
+    border-radius: 10px;
+    padding: 20px 20px 20px 30px;  /* ← more left padding */
+    position: relative;
+}
 
         .section { margin-bottom: 48px; }
 
@@ -397,53 +397,60 @@
             }
         });
 
-        new Chart(document.getElementById('genreChart'), {
-            type: 'bar',
-            data: {
-                labels: {{ genre_labels | tojson }},
-                datasets: [{
-                    label: 'Plays',
-                    data: {{ genre_values | tojson }},
-                    backgroundColor: neonColors.map(c => c + '88'),
-                    borderColor: neonColors,
-                    borderWidth: 1,
-                    borderRadius: 3,
-                }]
+     new Chart(document.getElementById('genreChart'), {
+    type: 'bar',
+    data: {
+        labels: {{ genre_labels | tojson }},
+        datasets: [{
+            label: 'Plays',
+            data: {{ genre_values | tojson }},
+            backgroundColor: neonColors.map(c => c + '88'),
+            borderColor: neonColors,
+            borderWidth: 1,
+            borderRadius: 3,
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: {
+            padding: { left: 0 }
+        },
+        plugins: {
+            legend: { display: false },
+            title: {
+                display: true,
+                text: 'TOP GENRES',
+                color: '#ffff00',
+                font: { family: 'Orbitron', size: 10 },
+                padding: { bottom: 10 }
             },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    title: {
-                        display: true,
-                        text: 'TOP GENRES',
-                        color: '#ffff00',
-                        font: { family: 'Orbitron', size: 10 },
-                        padding: { bottom: 10 }
-                    },
-                    tooltip: tooltipDefaults,
+            tooltip: tooltipDefaults,
+        },
+        scales: {
+            x: {
+                ticks: {
+                    color: '#00ffff',
+                    font: { family: 'Share Tech Mono', size: 9 }
                 },
-                scales: {
-                    x: {
-                        ticks: {
-                            color: '#00ffff',
-                            font: { family: 'Share Tech Mono', size: 9 }
-                        },
-                        grid: { color: '#ffffff0a' }
-                    },
-                    y: {
-                        ticks: {
-                            color: '#ff00aa',
-                            font: { family: 'Share Tech Mono', size: 13 },
-                            autoSkip: false,
-                        },
-                        grid: { color: '#ffffff0a' }
-                    }
-                }
+                grid: { color: '#ffffff0a' }
+            },
+            y: {
+                afterFit(axis) {
+                    axis.width = 110;
+                },
+                ticks: {
+                    color: '#ff00aa',
+                    font: { family: 'Share Tech Mono', size: 13 },
+                    autoSkip: false,
+                    padding: 4,
+                },
+                grid: { color: '#ffffff0a' }
             }
-        });
+        }
+    }
+});
     </script>
 </body>
 </html>

@@ -1596,13 +1596,21 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
         except Exception:
             artist_images[artist_name] = None
 
-    # Run concurrently in batches of 5 with delay to avoid rate limiting
-    artist_list = list(all_artists)[:80]
-    batch_size  = 5
+    # Prioritize artists that have a known Spotify ID — they load fastest
+    # and are guaranteed correct. Put those first, unknown ones after.
+    known_id_artists   = [a for a in all_artists if a in artist_id_map]
+    unknown_id_artists = [a for a in all_artists if a not in artist_id_map]
+
+    # Process known ID artists first with larger batches since they're fast
+    artist_list = known_id_artists + unknown_id_artists
+
+    batch_size = 10
     for i in range(0, len(artist_list), batch_size):
         batch = artist_list[i:i + batch_size]
+        # Use smaller delay for known ID artists, larger for search fallback
+        is_known_batch = all(a in artist_id_map for a in batch)
         await asyncio.gather(*[fetch_artist_image(a) for a in batch])
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.1 if is_known_batch else 0.3)
 
     # Build nodes
     connected_artists = set()
@@ -2115,4 +2123,169 @@ async def debug_artist_ids(db: AsyncSession = Depends(get_db)):
         "have_id":         len(artist_id_map),
         "missing_id":      len(missing),
         "missing_artists": sorted(missing),
+    }
+
+@app.get("/debug-fetch-genre/{artist_name}")
+async def debug_fetch_genre(artist_name: str, db: AsyncSession = Depends(get_db)):
+    import urllib.parse
+    artist_name  = urllib.parse.unquote(artist_name)
+    LASTFM_API_KEY = os.getenv("LASTFM_API_KEY")
+    encoded      = urllib.parse.quote(artist_name)
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        resp = await client.get(
+            f"https://ws.audioscrobbler.com/2.0/?method=artist.gettoptags"
+            f"&artist={encoded}&api_key={LASTFM_API_KEY}&format=json"
+        )
+    if resp.status_code == 200:
+        tags = resp.json().get("toptags", {}).get("tag", [])
+        return {
+            "all_tags": [{"name": t["name"], "count": t.get("count",0)} for t in tags],
+            "strong_tags": [t["name"] for t in tags if t.get("count", 0) >= 10],
+        }
+    return {"error": resp.status_code}
+
+@app.get("/debug-fetch-discogs/{artist_name}")
+async def debug_fetch_discogs(artist_name: str):
+    import urllib.parse
+    DISCOGS_TOKEN = os.getenv("DISCOGS_TOKEN")
+    encoded       = urllib.parse.quote(artist_name)
+    headers       = {
+        "User-Agent":    "RaveFM/1.0",
+        "Authorization": f"Discogs token={DISCOGS_TOKEN}",
+    }
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        search_resp = await client.get(
+            f"https://api.discogs.com/database/search?q={encoded}&type=artist",
+            headers=headers,
+        )
+    if search_resp.status_code != 200:
+        return {"error": search_resp.status_code}
+
+    results = search_resp.json().get("results", [])
+    if not results:
+        return {"error": "no results"}
+
+    artist_id = None
+    for r in results[:3]:
+        if r.get("title", "").lower() == artist_name.lower():
+            artist_id = r["id"]
+            break
+    if not artist_id:
+        artist_id = results[0]["id"]
+
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        releases_resp = await client.get(
+            f"https://api.discogs.com/artists/{artist_id}/releases"
+            f"?per_page=10&sort=year&sort_order=desc",
+            headers=headers,
+        )
+
+    releases = releases_resp.json().get("releases", [])
+    master_id = None
+    for r in releases:
+        if r.get("type") == "master" and r.get("role") == "Main":
+            master_id = r["id"]
+            break
+
+    if not master_id:
+        return {"error": "no master found", "releases": releases[:3]}
+
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        master_resp = await client.get(
+            f"https://api.discogs.com/masters/{master_id}",
+            headers=headers,
+        )
+
+    master_data = master_resp.json()
+    return {
+        "artist_id":  artist_id,
+        "master_id":  master_id,
+        "title":      master_data.get("title"),
+        "styles":     master_data.get("styles", []),
+        "genres":     master_data.get("genres", []),
+    }
+
+@app.get("/debug-discogs-artist/{artist_name}")
+async def debug_discogs_artist(artist_name: str):
+    import urllib.parse
+    DISCOGS_TOKEN = os.getenv("DISCOGS_TOKEN")
+    encoded       = urllib.parse.quote(artist_name)
+    headers       = {
+        "User-Agent":    "RaveFM/1.0",
+        "Authorization": f"Discogs token={DISCOGS_TOKEN}",
+    }
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        resp = await client.get(
+            f"https://api.discogs.com/database/search?q={encoded}&type=artist",
+            headers=headers,
+        )
+    if resp.status_code != 200:
+        return {"error": resp.status_code}
+
+    results = resp.json().get("results", [])
+    return {
+        "searching_for": artist_name,
+        "all_results": [
+            {
+                "id":    r.get("id"),
+                "title": r.get("title"),
+                "uri":   r.get("uri"),
+                "thumb": r.get("thumb"),
+            }
+            for r in results[:10]
+        ]
+    }
+
+@app.get("/debug-filter-test")
+async def debug_filter_test():
+    from tracker import filter_implausible_genres
+
+    test1_input  = ["Heavy Metal", "Hip Hop", "Electronic", "Funk"]
+    test1_output = filter_implausible_genres(test1_input)
+
+    test2_input  = ["Heavy Metal"]
+    test2_output = filter_implausible_genres(test2_input)
+
+    test3_input  = ["Heavy Metal", "dubstep", "glitch-hop"]
+    test3_output = filter_implausible_genres(test3_input)
+
+    return {
+        "test1": {"input": test1_input,  "output": test1_output},
+        "test2": {"input": test2_input,  "output": test2_output},
+        "test3": {"input": test3_input,  "output": test3_output},
+    }
+
+@app.get("/clear-genre-cache")
+async def clear_genre_cache(db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import delete
+    await db.execute(delete(ArtistCache))
+    await db.commit()
+    return {"message": "Genre cache cleared"}
+
+@app.get("/cleanup-bad-genres")
+async def cleanup_bad_genres(db: AsyncSession = Depends(get_db)):
+    from tracker import filter_implausible_genres
+
+    # Get all plays that have a primary_genre
+    plays_q = select(TrackPlay).where(TrackPlay.primary_genre != None)
+    plays   = (await db.execute(plays_q)).scalars().fetchall()
+
+    updated = 0
+    for play in plays:
+        if not play.primary_genre:
+            continue
+
+        genre_list    = [g.strip() for g in play.primary_genre.split(",") if g.strip()]
+        filtered      = filter_implausible_genres(genre_list)
+        filtered_str  = ", ".join(filtered)
+
+        if filtered_str != play.primary_genre:
+            print(f"[CLEANUP] {play.track_name} by {play.artists}: '{play.primary_genre}' -> '{filtered_str}'")
+            play.primary_genre = filtered_str
+            updated += 1
+
+    await db.commit()
+    return {
+        "message": f"Updated {updated} tracks",
+        "total_checked": len(plays),
     }
