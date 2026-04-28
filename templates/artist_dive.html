@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ARTIST DIVE // RAVE FM</title>
+    <title>{{ artist_name }} // RAVE FM</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
@@ -11,39 +11,39 @@
         .scanlines { pointer-events: none; position: fixed; inset: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 4px); z-index: 10; }
         .bg { position: fixed; inset: 0; background: radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%), #000; animation: bgshift 6s ease-in-out infinite alternate; z-index: 0; }
         @keyframes bgshift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(180deg); } }
-        .content { position: relative; z-index: 5; max-width: 1000px; margin: 0 auto; }
+        .content { position: relative; z-index: 5; max-width: 1100px; margin: 0 auto; }
+        h1 { font-family: 'Orbitron', sans-serif; font-size: 2.2rem; font-weight: 900; background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff); background-size: 300% 100%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: rainbowShift 4s linear infinite; filter: drop-shadow(0 0 12px #ff00ff); letter-spacing: 4px; margin-bottom: 8px; }
         @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+        .subtitle { color: #00ffff; text-shadow: 0 0 8px #00ffff; letter-spacing: 4px; font-size: 0.75rem; margin-bottom: 40px; }
         .nav { display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
         .nav a { color: #ff00aa; text-decoration: none; font-size: 0.75rem; letter-spacing: 2px; text-shadow: 0 0 8px #ff00aa; }
         .nav a:hover { color: #fff; }
         h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 4px; color: #ffff00; text-shadow: 0 0 10px #ffff0088; margin-bottom: 16px; border-bottom: 1px solid #ffff0033; padding-bottom: 8px; }
-
         /* ── Hero ── */
-        .hero {
+        .artist-hero {
             display: flex;
             align-items: center;
             gap: 32px;
-            margin-bottom: 40px;
-            padding: 32px;
             background: rgba(255,255,255,0.03);
-            border: 1px solid #ff00ff33;
+            border: 1px solid #ff00ff44;
             border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 40px;
             box-shadow: 0 0 40px #ff00ff22;
+            flex-wrap: wrap;
         }
-
-        .hero-art {
-            width: 140px;
-            height: 140px;
+        .artist-hero img {
+            width: 120px;
+            height: 120px;
             border-radius: 12px;
             object-fit: cover;
+            border: 2px solid #ff00ff66;
+            box-shadow: 0 0 20px #ff00ff44;
             flex-shrink: 0;
-            border: 2px solid #ff00ff44;
-            box-shadow: 0 0 30px #ff00ff44;
         }
-
-        .hero-art-placeholder {
-            width: 140px;
-            height: 140px;
+        .artist-hero .ah-ph {
+            width: 120px;
+            height: 120px;
             border-radius: 12px;
             background: #ff00ff22;
             border: 2px solid #ff00ff44;
@@ -53,175 +53,239 @@
             font-size: 3rem;
             flex-shrink: 0;
         }
-
-        .hero-info h1 {
+        .artist-hero .ah-info { flex: 1; min-width: 0; }
+        .artist-hero .ah-name {
             font-family: 'Orbitron', sans-serif;
-            font-size: 2rem;
+            font-size: 1.8rem;
             font-weight: 900;
-            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
-            background-size: 300% 100%;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            animation: rainbowShift 4s linear infinite;
-            filter: drop-shadow(0 0 12px #ff00ff);
-            letter-spacing: 4px;
-            margin-bottom: 12px;
+            color: #fff;
+            letter-spacing: 3px;
+            margin-bottom: 8px;
         }
-
-        .hero-genres {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-bottom: 12px;
-        }
-
-        .genre-tag {
-            background: #ff00ff22;
-            border: 1px solid #ff00ff44;
-            border-radius: 99px;
-            padding: 3px 10px;
-            font-size: 0.62rem;
-            letter-spacing: 2px;
-            color: #ff00ff;
-        }
-
-        .hero-meta {
+        .artist-hero .ah-genres {
             font-size: 0.68rem;
-            color: #888;
-            letter-spacing: 1px;
-            line-height: 1.8;
+            color: #00ffff;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
         }
-
-        .hero-meta span { color: #00ffff; }
-
+        .artist-hero .ah-quick {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .ah-quick-stat { text-align: center; }
+        .ah-quick-stat .val { font-family: 'Orbitron', sans-serif; font-size: 1.2rem; color: #00ffff; text-shadow: 0 0 10px #00ffff; }
+        .ah-quick-stat .lbl { font-size: 0.58rem; color: #ff00aa; letter-spacing: 2px; margin-top: 3px; }
         /* ── Stats grid ── */
         .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 40px; }
-        .stat-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff44; border-radius: 10px; padding: 20px; text-align: center; }
-        .stat-value { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; font-weight: 900; color: #00ffff; text-shadow: 0 0 16px #00ffff; }
-        .stat-label { font-size: 0.62rem; letter-spacing: 2px; color: #ff00aa; margin-top: 6px; }
-
+        .stats-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 40px; }
+        .stat-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff44; border-radius: 10px; padding: 18px; text-align: center; }
+        .stat-card.highlight { border-color: #00ff8866; box-shadow: 0 0 16px #00ff8822; }
+        .stat-value { font-family: 'Orbitron', sans-serif; font-size: 1.3rem; font-weight: 900; color: #00ffff; text-shadow: 0 0 12px #00ffff; }
+        .stat-value.green  { color: #00ff88; text-shadow: 0 0 12px #00ff88; }
+        .stat-value.pink   { color: #ff00aa; text-shadow: 0 0 12px #ff00aa44; }
+        .stat-value.yellow { color: #ffff00; text-shadow: 0 0 12px #ffff0088; }
+        .stat-label { font-size: 0.6rem; letter-spacing: 2px; color: #ff00aa; margin-top: 6px; }
+        .stat-sub   { font-size: 0.55rem; color: #555; letter-spacing: 1px; margin-top: 3px; }
         /* ── Two col ── */
         .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 40px; }
-
+        /* ── Section ── */
+        .section { margin-bottom: 48px; }
+        /* ── Charts ── */
+        .chart-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff22; border-radius: 10px; padding: 20px; }
+        .chart-card canvas { max-height: 240px; }
         /* ── Track list ── */
-        .section { margin-bottom: 40px; }
-
         .track-item {
             display: flex;
             align-items: center;
-            gap: 14px;
-            padding: 10px 0;
+            gap: 12px;
+            padding: 9px 0;
             border-bottom: 1px solid #ffffff08;
             transition: background 0.15s;
         }
-
         .track-item:hover { background: #ffffff05; }
-
-        .track-item .rank {
-            font-size: 0.7rem;
-            color: #ff00aa;
-            width: 20px;
-            flex-shrink: 0;
-            text-align: right;
-        }
-
-        .track-item img {
-            width: 40px;
-            height: 40px;
+        .track-item img { width: 40px; height: 40px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
+        .track-item .img-ph { width: 40px; height: 40px; border-radius: 4px; background: #ff00ff11; flex-shrink: 0; }
+        .track-item .ti-name   { font-size: 0.78rem; color: #fff; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .track-item .ti-album  { font-size: 0.62rem; color: #888; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .track-item .ti-meta   { text-align: right; flex-shrink: 0; }
+        .track-item .ti-plays  { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: #00ffff; }
+        .track-item .ti-skip   { font-size: 0.6rem; color: #ff00aa; margin-top: 2px; }
+        /* ── Badges ── */
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
             border-radius: 4px;
-            object-fit: cover;
-            flex-shrink: 0;
-        }
-
-        .track-item .img-placeholder {
-            width: 40px;
-            height: 40px;
-            border-radius: 4px;
-            background: #ff00ff22;
-            flex-shrink: 0;
-        }
-
-        .track-item .info { flex: 1; min-width: 0; }
-        .track-item .info .name { font-size: 0.82rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .track-item .info .sub  { font-size: 0.65rem; color: #888; margin-top: 2px; letter-spacing: 1px; }
-
-        .track-item .plays-badge {
-            font-size: 0.65rem;
-            color: #00ffff;
-            flex-shrink: 0;
+            font-size: 0.6rem;
             letter-spacing: 1px;
         }
-
-        .skip-rate-bar {
-            width: 60px;
-            height: 4px;
-            background: #ffffff15;
-            border-radius: 99px;
-            overflow: hidden;
-            flex-shrink: 0;
-        }
-
-        .skip-rate-fill {
-            height: 100%;
-            border-radius: 99px;
-            background: #ff00aa;
-        }
-
-        /* ── Co-artists ── */
-        .co-artist-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-            gap: 10px;
-        }
-
-        .co-artist-card {
-            background: rgba(255,255,255,0.03);
-            border: 1px solid #ff00ff22;
-            border-radius: 8px;
-            padding: 12px 14px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            text-decoration: none;
-            transition: background 0.15s;
-        }
-
-        .co-artist-card:hover { background: rgba(255,0,255,0.08); border-color: #ff00ff44; }
-        .co-artist-card .ca-name  { font-size: 0.72rem; color: #00ffff; letter-spacing: 1px; }
-        .co-artist-card .ca-count { font-size: 0.62rem; color: #555; }
-
+        .badge.green  { background: #00ff8822; color: #00ff88; border: 1px solid #00ff8844; }
+        .badge.pink   { background: #ff00aa22; color: #ff00aa; border: 1px solid #ff00aa44; }
+        .badge.yellow { background: #ffff0022; color: #ffff00; border: 1px solid #ffff0044; }
+        .badge.cyan   { background: #00ffff22; color: #00ffff; border: 1px solid #00ffff44; }
         /* ── Mood breakdown ── */
-        .mood-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        .mood-row {
+            display: flex;
+            align-items: center;
             gap: 10px;
+            padding: 7px 0;
+            border-bottom: 1px solid #ffffff08;
         }
-
-        .mood-card {
-            background: rgba(255,255,255,0.03);
-            border: 1px solid #ff00ff22;
+        .mood-row .mr-name  { font-size: 0.72rem; color: #fff; width: 120px; flex-shrink: 0; }
+        .mood-row .mr-bar   { flex: 1; height: 6px; background: #ffffff11; border-radius: 99px; overflow: hidden; }
+        .mood-row .mr-fill  { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #ff00ff, #00ffff); }
+        .mood-row .mr-count { font-size: 0.65rem; color: #888; width: 40px; text-align: right; flex-shrink: 0; }
+        /* ── Co-artists ── */
+        .co-artist-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #ffffff08;
+            font-size: 0.78rem;
+        }
+        .co-artist-row a { color: #00ffff; text-decoration: none; }
+        .co-artist-row a:hover { color: #fff; }
+        .co-artist-row .car-count { color: #ff00aa; font-size: 0.68rem; }
+        /* ── Personality ── */
+        .personality-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 40px; }
+        .pers-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid #ffffff11;
             border-radius: 8px;
-            padding: 12px;
+            padding: 14px;
             text-align: center;
         }
-
-        .mood-card .mc-mood  { font-size: 0.62rem; letter-spacing: 2px; color: #ff00ff; margin-bottom: 4px; }
-        .mood-card .mc-count { font-family: 'Orbitron', sans-serif; font-size: 1rem; color: #00ffff; }
-
-        /* ── Chart ── */
-        .chart-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff22; border-radius: 10px; padding: 20px; margin-bottom: 40px; height: 220px; }
-
-        .empty { color: #555; font-size: 0.8rem; letter-spacing: 2px; text-align: center; padding: 60px 0; }
-
-        .played-badge  { display: inline-block; background: #00ff8822; color: #00ff88; border: 1px solid #00ff8855; border-radius: 4px; padding: 2px 6px; font-size: 0.58rem; letter-spacing: 2px; }
-        .skipped-badge { display: inline-block; background: #ff00aa22; color: #ff00aa; border: 1px solid #ff00aa55; border-radius: 4px; padding: 2px 6px; font-size: 0.58rem; letter-spacing: 2px; }
-
-        @media (max-width: 700px) {
-            .hero        { flex-direction: column; text-align: center; }
-            .stats-grid  { grid-template-columns: repeat(2, 1fr); }
-            .two-col     { grid-template-columns: 1fr; }
+        .pers-card .pc-val   { font-family: 'Orbitron', sans-serif; font-size: 1.1rem; color: #00ffff; text-shadow: 0 0 10px #00ffff44; }
+        .pers-card .pc-label { font-size: 0.58rem; letter-spacing: 2px; color: #888; margin-top: 4px; }
+        /* ── Related artists ── */
+        .related-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
         }
+        .related-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--rc, #ff00ff22);
+            border-radius: 10px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            text-decoration: none;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .related-card:hover {
+            border-color: var(--rc-hover, #ff00ff88);
+            background: rgba(255,0,255,0.05);
+            transform: translateY(-2px);
+        }
+        .related-card img {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #ffffff11;
+        }
+        .related-card .rc-ph {
+            width: 100%;
+            aspect-ratio: 1;
+            background: #ff00ff11;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+        }
+        .related-card .rc-name {
+            font-size: 0.72rem;
+            color: #fff;
+            letter-spacing: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .related-card .rc-genre {
+            font-size: 0.58rem;
+            color: #888;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .related-card .rc-badge {
+            font-size: 0.58rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 1px;
+            display: inline-block;
+        }
+        .rc-badge.in-library  { background: #00ff8822; color: #00ff88; border: 1px solid #00ff8844; }
+        .rc-badge.not-library { background: #ffffff11; color: #555;    border: 1px solid #ffffff22; }
+        .related-two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+            margin-bottom: 40px;
+        }
+        .related-section-label {
+            font-size: 0.62rem;
+            letter-spacing: 3px;
+            margin-bottom: 12px;
+        }
+        /* ── Scores ── */
+        .score-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 0;
+            border-bottom: 1px solid #ffffff08;
+        }
+        .score-row .sr-label { font-size: 0.65rem; letter-spacing: 2px; color: #888; width: 140px; flex-shrink: 0; }
+        .score-row .sr-bar   { flex: 1; height: 8px; background: #ffffff11; border-radius: 99px; overflow: hidden; }
+        .score-row .sr-fill  { height: 100%; border-radius: 99px; }
+        .score-row .sr-val   { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; width: 50px; text-align: right; flex-shrink: 0; }
+        .empty { color: #555; font-size: 0.75rem; letter-spacing: 2px; padding: 20px 0; }
+        @media (max-width: 700px) {
+            .stats-grid     { grid-template-columns: repeat(2, 1fr); }
+            .stats-grid-3   { grid-template-columns: repeat(2, 1fr); }
+            .two-col        { grid-template-columns: 1fr; }
+            .personality-grid { grid-template-columns: repeat(2, 1fr); }
+            .related-two-col  { grid-template-columns: 1fr; }
+            .artist-hero    { flex-direction: column; text-align: center; }
+            .ah-quick       { justify-content: center; }
+        }
+
+        /* ── Info card ── */
+.info-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid #ffff0022;
+    border-radius: 10px;
+    overflow: hidden;
+}
+.info-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.info-header:hover { background: rgba(255,255,0,0.04); }
+.info-arrow { color: #ffff0088; font-size: 0.7rem; transition: transform 0.3s; }
+.info-arrow.open { transform: rotate(180deg); }
+.info-body { display: none; padding: 20px; border-top: 1px solid #ffff0022; }
+.info-body.open { display: block; }
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+.info-dim { background: rgba(255,255,255,0.02); border-radius: 8px; padding: 14px; }
+.info-dim-title { font-family: 'Orbitron', sans-serif; font-size: 0.7rem; letter-spacing: 2px; margin-bottom: 10px; }
+.info-dim-desc { font-size: 0.68rem; color: #888; letter-spacing: 0.5px; line-height: 1.8; }
     </style>
 </head>
 <body>
@@ -232,159 +296,240 @@
             <a href="/">⌂ HOME</a>
             <a href="/now-playing">▶ NOW PLAYING</a>
             <a href="/stats">◈ STATS</a>
-            <a href="/artist-search">🔍 SEARCH ARTIST</a>
+            <a href="/artist-search">🎤 ARTISTS</a>
             <a href="/logout">⏏ LOGOUT</a>
         </div>
 
         {% if not found %}
-            <p class="empty">// NO DATA FOUND FOR "{{ artist_name }}" //</p>
+        <h1>{{ artist_name }}</h1>
+        <p style="color:#555; font-size:0.8rem; letter-spacing:2px; margin-top:20px;">// NO DATA FOUND FOR THIS ARTIST //</p>
+
         {% else %}
 
         <!-- Hero -->
-        <div class="hero">
+        <div class="artist-hero">
             {% if artist_image %}
-            <img class="hero-art" src="{{ artist_image }}" alt="{{ artist_name }}">
+            <img src="{{ artist_image }}" alt="{{ artist_name }}">
             {% else %}
-            <div class="hero-art-placeholder">🎤</div>
+            <div class="ah-ph">🎤</div>
             {% endif %}
-            <div class="hero-info">
-                <h1>{{ artist_name }}</h1>
+            <div class="ah-info">
+                <div class="ah-name">{{ artist_name }}</div>
                 {% if top_genres %}
-                <div class="hero-genres">
-                    {% for genre in top_genres %}
-                    <span class="genre-tag">{{ genre }}</span>
-                    {% endfor %}
-                </div>
+                <div class="ah-genres">{{ top_genres | join(' · ') | upper }}</div>
                 {% endif %}
-                <div class="hero-meta">
-                    First played <span>{{ first_play.listened_at.strftime("%B %d, %Y") }}</span>
-                    · Last played <span>{{ latest_play.listened_at.strftime("%B %d, %Y") }}</span>
-                    · <span>{{ unique_albums }}</span> albums
-                    {% if peak_hour is not none %}
-                    · Peak hour <span>{{ "%02d:00" | format(peak_hour) }}</span>
-                    {% endif %}
-                    {% if peak_dow %}
-                    · Peak day <span>{{ peak_dow }}</span>
-                    {% endif %}
-                    {% if dominant_mood and dominant_mood != 'UNKNOWN' %}
-                    · Dominant mood <span>{{ dominant_mood }}</span>
-                    {% endif %}
+                <div class="ah-quick">
+                    <div class="ah-quick-stat">
+                        <div class="val">{{ total }}</div>
+                        <div class="lbl">PLAYS</div>
+                    </div>
+                    <div class="ah-quick-stat">
+                        <div class="val">{{ hours }}h</div>
+                        <div class="lbl">LISTENED</div>
+                    </div>
+                    <div class="ah-quick-stat">
+                        <div class="val">{{ skip_rate }}%</div>
+                        <div class="lbl">SKIP RATE</div>
+                    </div>
+                    <div class="ah-quick-stat">
+                        <div class="val">{{ current_streak }}</div>
+                        <div class="lbl">DAY STREAK</div>
+                    </div>
+                    <div class="ah-quick-stat">
+                        <div class="val">{{ dominant_mood }}</div>
+                        <div class="lbl">VIBE</div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Stats -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value">{{ total }}</div>
-                <div class="stat-label">TOTAL PLAYS</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ minutes }}m</div>
-                <div class="stat-label">MINUTES LISTENED</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ skip_rate }}%</div>
-                <div class="stat-label">SKIP RATE</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ completion }}%</div>
-                <div class="stat-label">COMPLETION RATE</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ skips }}</div>
-                <div class="stat-label">TOTAL SKIPS</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ max_streak }}</div>
-                <div class="stat-label">LONGEST STREAK</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ most_played_tracks | length }}</div>
-                <div class="stat-label">UNIQUE TRACKS</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ unique_albums }}</div>
-                <div class="stat-label">ALBUMS</div>
+        <!-- Core stats -->
+        <div class="section">
+            <h2>⚡ CORE STATS</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{{ total }}</div>
+                    <div class="stat-label">TOTAL PLAYS</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ hours }}h</div>
+                    <div class="stat-label">HOURS LISTENED</div>
+                    <div class="stat-sub">{{ minutes }}m total</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value {% if skip_rate < 20 %}green{% elif skip_rate > 50 %}pink{% endif %}">{{ skip_rate }}%</div>
+                    <div class="stat-label">SKIP RATE</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value green">{{ comp_rate }}%</div>
+                    <div class="stat-label">COMPLETION RATE</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ unique_tracks }}</div>
+                    <div class="stat-label">UNIQUE TRACKS</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ unique_albums }}</div>
+                    <div class="stat-label">UNIQUE ALBUMS</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ active_days }}</div>
+                    <div class="stat-label">ACTIVE DAYS</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ plays_per_day }}</div>
+                    <div class="stat-label">PLAYS PER DAY</div>
+                </div>
             </div>
         </div>
 
-        <!-- Play trend chart -->
-        {% if monthly_labels %}
+        <!-- Loyalty + consistency scores -->
         <div class="section">
-            <h2>📈 PLAY TREND</h2>
+            <h2>🔥 LOYALTY SCORES</h2>
+            <div class="stats-grid-3">
+                <div class="stat-card highlight">
+                    <div class="stat-value green">{{ loyalty }}</div>
+                    <div class="stat-label">LOYALTY SCORE</div>
+                    <div class="stat-sub">out of 100</div>
+                </div>
+                <div class="stat-card highlight">
+                    <div class="stat-value yellow">{{ consistency }}%</div>
+                    <div class="stat-label">CONSISTENCY</div>
+                    <div class="stat-sub">active days / days known</div>
+                </div>
+                <div class="stat-card highlight">
+                    <div class="stat-value">{{ max_streak }}</div>
+                    <div class="stat-label">LONGEST STREAK</div>
+                    <div class="stat-sub">consecutive days</div>
+                </div>
+            </div>
+            <div class="section">
+                {% set score_rows = [
+                    ("COMPLETION RATE", comp_rate, 100, "#00ff88"),
+                    ("LOYALTY SCORE",   loyalty,   100, "#ff6600"),
+                    ("CONSISTENCY %",   consistency, 100, "#ffff00"),
+                    ("AVG PROGRESS %",  avg_progress, 100, "#00ffff"),
+                ] %}
+                {% for label, val, max_val, color in score_rows %}
+                <div class="score-row">
+                    <div class="sr-label">{{ label }}</div>
+                    <div class="sr-bar">
+                        <div class="sr-fill" style="width:{{ [(val / max_val * 100), 100] | min | round | int }}%; background:{{ color }}; box-shadow: 0 0 6px {{ color }}88;"></div>
+                    </div>
+                    <div class="sr-val" style="color:{{ color }};">{{ val }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Score explanations -->
+<div class="info-card" id="infoCard" style="margin-bottom: 24px;">
+    <div class="info-header" onclick="toggleInfo()">
+        <span style="color:#ffff00; letter-spacing:3px; font-size:0.75rem;">◈ HOW SCORES ARE CALCULATED</span>
+        <span class="info-arrow" id="infoArrow">▼</span>
+    </div>
+    <div class="info-body" id="infoBody">
+        <div class="info-grid">
+            <div class="info-dim">
+                <div class="info-dim-title" style="color:#ff6600;">🔥 LOYALTY SCORE</div>
+                <div class="info-dim-desc">
+                    A score out of 100 measuring how devoted you are to an artist.<br><br>
+                    <strong style="color:#ff00ff;">40%</strong> — Completion rate (how often you finish their songs)<br>
+                    <strong style="color:#ff00ff;">30%</strong> — Total plays (capped at 100 plays = full marks)<br>
+                    <strong style="color:#ff00ff;">20%</strong> — Longest listening streak (capped at 30 days)<br>
+                    <strong style="color:#ff00ff;">10%</strong> — Active listening days (capped at 50 days)<br><br>
+                    A score of 100 means you listen constantly, never skip, and have long streaks.
+                </div>
+            </div>
+            <div class="info-dim">
+                <div class="info-dim-title" style="color:#aa00ff;">📅 CONSISTENCY %</div>
+                <div class="info-dim-desc">
+                    How regularly you listen to an artist relative to how long you've known them.<br><br>
+                    Calculated as: <strong style="color:#00ffff;">(active days ÷ days since first play) × 100</strong><br><br>
+                    A score of 100% means you listened on every single day since you first discovered them. 50% means you listened on half the days. Capped at 100%.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+        <!-- Charts -->
+        <div class="two-col section">
             <div class="chart-card">
-                <canvas id="trendChart"></canvas>
+                <canvas id="monthlyChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <canvas id="hourChart"></canvas>
             </div>
         </div>
-        {% endif %}
 
-        <!-- Most played tracks -->
+        <!-- Personality -->
         <div class="section">
-            <h2>⚡ MOST PLAYED TRACKS</h2>
-            {% for t in most_played_tracks %}
-            <div class="track-item">
-                <div class="rank">{{ loop.index }}</div>
-                {% if t.art %}
-                <img src="{{ t.art }}" alt="art">
-                {% else %}
-                <div class="img-placeholder"></div>
-                {% endif %}
-                <div class="info">
-                    <div class="name">{{ t.name }}</div>
-                    <div class="sub">{{ t.album or "—" }} · skip rate {{ t.skip_rate }}%</div>
+            <h2>🎭 LISTENING PERSONALITY</h2>
+            <div class="personality-grid">
+                <div class="pers-card">
+                    <div class="pc-val">{{ peak_hour is not none and "%02d:00" | format(peak_hour) or "—" }}</div>
+                    <div class="pc-label">PEAK HOUR</div>
                 </div>
-                <div class="skip-rate-bar">
-                    <div class="skip-rate-fill" style="width:{{ t.skip_rate }}%"></div>
+                <div class="pers-card">
+                    <div class="pc-val">{{ peak_dow or "—" }}</div>
+                    <div class="pc-label">PEAK DAY</div>
                 </div>
-                <div class="plays-badge">{{ t.plays }} plays</div>
+                <div class="pers-card">
+                    <div class="pc-val">{{ night_pct }}%</div>
+                    <div class="pc-label">NIGHT OWL</div>
+                </div>
+                <div class="pers-card">
+                    <div class="pc-val">{{ morning_pct }}%</div>
+                    <div class="pc-label">MORNING</div>
+                </div>
+                <div class="pers-card">
+                    <div class="pc-val">{{ weekend_pct }}%</div>
+                    <div class="pc-label">WEEKEND %</div>
+                </div>
+                <div class="pers-card">
+                    <div class="pc-val">{{ binge_days }}</div>
+                    <div class="pc-label">BINGE DAYS (5+)</div>
+                </div>
+                <div class="pers-card">
+                    <div class="pc-val">{{ comebacks }}</div>
+                    <div class="pc-label">COMEBACKS</div>
+                </div>
+                <div class="pers-card">
+                    <div class="pc-val">{{ longest_gap }}</div>
+                    <div class="pc-label">LONGEST GAP (DAYS)</div>
+                </div>
+                <div class="pers-card">
+                    <div class="pc-val">{{ rediscoveries }}</div>
+                    <div class="pc-label">REDISCOVERIES</div>
+                </div>
             </div>
-            {% endfor %}
         </div>
 
-        <!-- Always completed + Most skipped -->
-        <div class="two-col">
-            <div>
-                <h2>💚 ALWAYS COMPLETED</h2>
-                {% if always_completed %}
-                    {% for t in always_completed %}
-                    <div class="track-item">
-                        {% if t.art %}
-                        <img src="{{ t.art }}" alt="art">
-                        {% else %}
-                        <div class="img-placeholder"></div>
-                        {% endif %}
-                        <div class="info">
-                            <div class="name">{{ t.name }}</div>
-                            <div class="sub">{{ t.plays }} plays · 0 skips</div>
-                        </div>
-                        <span class="played-badge">✓</span>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <p style="color:#555; font-size:0.75rem; letter-spacing:2px; padding:20px 0;">— NOT ENOUGH DATA —</p>
-                {% endif %}
-            </div>
-            <div>
-                <h2>⏭ MOST SKIPPED</h2>
-                {% if most_skipped_tracks %}
-                    {% for t in most_skipped_tracks %}
-                    <div class="track-item">
-                        {% if t.art %}
-                        <img src="{{ t.art }}" alt="art">
-                        {% else %}
-                        <div class="img-placeholder"></div>
-                        {% endif %}
-                        <div class="info">
-                            <div class="name">{{ t.name }}</div>
-                            <div class="sub">{{ t.skips }}/{{ t.plays }} skipped</div>
-                        </div>
-                        <span class="skipped-badge">{{ t.skip_rate }}%</span>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <p style="color:#555; font-size:0.75rem; letter-spacing:2px; padding:20px 0;">— NO SKIPS —</p>
-                {% endif %}
+        <!-- Time of day breakdown -->
+        <div class="section">
+            <h2>🕐 TIME OF DAY</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{{ time_buckets.morning }}</div>
+                    <div class="stat-label">🌅 MORNING</div>
+                    <div class="stat-sub">05:00 – 12:00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ time_buckets.afternoon }}</div>
+                    <div class="stat-label">☀ AFTERNOON</div>
+                    <div class="stat-sub">12:00 – 17:00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ time_buckets.evening }}</div>
+                    <div class="stat-label">🌆 EVENING</div>
+                    <div class="stat-sub">17:00 – 21:00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ time_buckets.night }}</div>
+                    <div class="stat-label">🌙 NIGHT</div>
+                    <div class="stat-sub">21:00 – 05:00</div>
+                </div>
             </div>
         </div>
 
@@ -392,38 +537,179 @@
         {% if mood_breakdown %}
         <div class="section">
             <h2>🎵 MOOD BREAKDOWN</h2>
-            <div class="mood-grid">
-                {% for mood, count in mood_breakdown.items() %}
-                <div class="mood-card">
-                    <div class="mc-mood">{{ mood }}</div>
-                    <div class="mc-count">{{ count }}</div>
+            {% set max_mood = mood_breakdown.values() | max %}
+            {% for mood, count in mood_breakdown.items() %}
+            <div class="mood-row">
+                <div class="mr-name">{{ mood }}</div>
+                <div class="mr-bar">
+                    <div class="mr-fill" style="width:{{ (count / max_mood * 100) | round | int }}%"></div>
                 </div>
-                {% endfor %}
+                <div class="mr-count">{{ count }}</div>
             </div>
+            {% endfor %}
         </div>
         {% endif %}
 
-        <!-- Co-listened artists -->
-        {% if top_co_artists %}
-        <div class="section">
-            <h2>🔗 OFTEN LISTENED WITH</h2>
-            <div class="co-artist-grid">
-                {% for artist in top_co_artists %}
-                <a href="/artist/{{ artist.name | urlencode }}" class="co-artist-card">
-                    <span class="ca-name">{{ artist.name }}</span>
-                    <span class="ca-count">{{ artist.count }}×</span>
-                </a>
+        <!-- Tracks -->
+        <div class="two-col section">
+            <!-- Most played -->
+            <div>
+                <h2>🎵 MOST PLAYED</h2>
+                {% for track in most_played_tracks %}
+                <div class="track-item">
+                    {% if track.art %}<img src="{{ track.art }}" alt="art">{% else %}<div class="img-ph"></div>{% endif %}
+                    <div style="flex:1; min-width:0;">
+                        <div class="ti-name">{{ track.name }}</div>
+                        {% if track.album %}<div class="ti-album">{{ track.album }}</div>{% endif %}
+                    </div>
+                    <div class="ti-meta">
+                        <div class="ti-plays">{{ track.plays }}x</div>
+                        {% if track.skip_rate > 0 %}
+                        <div class="ti-skip">{{ track.skip_rate }}% skip</div>
+                        {% endif %}
+                    </div>
+                </div>
                 {% endfor %}
             </div>
+            <!-- Always completed -->
+            <div>
+                <h2>💚 ALWAYS COMPLETED</h2>
+                {% if always_completed %}
+                {% for track in always_completed %}
+                <div class="track-item">
+                    {% if track.art %}<img src="{{ track.art }}" alt="art">{% else %}<div class="img-ph"></div>{% endif %}
+                    <div style="flex:1; min-width:0;">
+                        <div class="ti-name">{{ track.name }}</div>
+                    </div>
+                    <div class="ti-meta">
+                        <div class="ti-plays">{{ track.plays }}x</div>
+                        <span class="badge green">✓ NEVER SKIPPED</span>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p class="empty">// NONE YET //</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Most skipped -->
+        {% if most_skipped_tracks %}
+        <div class="section">
+            <h2>⏭ MOST SKIPPED</h2>
+            {% for track in most_skipped_tracks %}
+            <div class="track-item">
+                {% if track.art %}<img src="{{ track.art }}" alt="art">{% else %}<div class="img-ph"></div>{% endif %}
+                <div style="flex:1; min-width:0;">
+                    <div class="ti-name">{{ track.name }}</div>
+                </div>
+                <div class="ti-meta">
+                    <div class="ti-plays" style="color:#ff00aa;">{{ track.skips }} skips</div>
+                    <div class="ti-skip">{{ track.skip_rate }}% rate</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- First / last play + busiest day -->
+        <div class="section">
+            <h2>📅 TIMELINE</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" style="font-size:0.9rem;">{{ first_play.listened_at.strftime("%b %d, %Y") }}</div>
+                    <div class="stat-label">FIRST PLAY</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="font-size:0.9rem;">{{ last_play.listened_at.strftime("%b %d, %Y") }}</div>
+                    <div class="stat-label">LAST PLAY</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ days_since_first }}</div>
+                    <div class="stat-label">DAYS IN HISTORY</div>
+                </div>
+                <div class="stat-card">
+                    {% if busiest_day %}
+                    <div class="stat-value" style="font-size:0.9rem;">{{ busiest_day }}</div>
+                    <div class="stat-label">BUSIEST DAY</div>
+                    <div class="stat-sub">{{ busiest_day_count }} plays</div>
+                    {% else %}
+                    <div class="stat-value">—</div>
+                    <div class="stat-label">BUSIEST DAY</div>
+                    {% endif %}
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value yellow">{{ most_played_month or "—" }}</div>
+                    <div class="stat-label">TOP MONTH</div>
+                    {% if most_played_month_count %}<div class="stat-sub">{{ most_played_month_count }} plays</div>{% endif %}
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ top_album or "—" }}</div>
+                    <div class="stat-label">TOP ALBUM</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ max_comp_streak }}</div>
+                    <div class="stat-label">LONGEST COMPLETE STREAK</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value pink">{{ max_skip_streak }}</div>
+                    <div class="stat-label">LONGEST SKIP STREAK</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Skip analysis -->
+        <div class="section">
+            <h2>🎯 SKIP ANALYSIS</h2>
+            <div class="stats-grid-3">
+                <div class="stat-card">
+                    <div class="stat-value pink">{{ avg_progress }}%</div>
+                    <div class="stat-label">AVG PROGRESS</div>
+                    <div class="stat-sub">across all plays</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value pink">{% if avg_skip_point %}{{ avg_skip_point }}%{% else %}—{% endif %}</div>
+                    <div class="stat-label">AVG SKIP POINT</div>
+                    <div class="stat-sub">where you bail</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ plays_per_week }}</div>
+                    <div class="stat-label">PLAYS PER WEEK</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Co-artists -->
+        {% if top_co_artists %}
+        <div class="section">
+            <h2>🎤 LISTENED ALONGSIDE</h2>
+            <p style="font-size:0.65rem; color:#555; letter-spacing:1px; margin-bottom:16px;">Artists you tend to listen to in the same session.</p>
+            {% for co in top_co_artists %}
+            <div class="co-artist-row">
+                <a href="/artist/{{ co.name | urlencode }}">{{ co.name }}</a>
+                <span class="car-count">{{ co.count }} sessions together</span>
+            </div>
+            {% endfor %}
         </div>
         {% endif %}
 
         {% endif %}
     </div>
 
-    {% if found and monthly_labels %}
+    {% if found %}
     <script>
-        new Chart(document.getElementById('trendChart'), {
+        const tooltipDefaults = {
+            backgroundColor: '#111',
+            borderColor: '#ff00ff',
+            borderWidth: 1,
+            titleColor: '#00ffff',
+            bodyColor: '#fff',
+            titleFont: { family: 'Share Tech Mono' },
+            bodyFont:  { family: 'Share Tech Mono' },
+        };
+
+        // Monthly trend
+        new Chart(document.getElementById('monthlyChart'), {
             type: 'bar',
             data: {
                 labels: {{ monthly_labels | tojson }},
@@ -434,6 +720,47 @@
                     borderColor: '#ff00ff',
                     borderWidth: 1,
                     borderRadius: 3,
+                }, {
+                    label: 'Skip Rate %',
+                    data: {{ monthly_skip_rates | tojson }},
+                    backgroundColor: '#ff00aa22',
+                    borderColor: '#ff00aa',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                    type: 'line',
+                    yAxisID: 'y1',
+                    tension: 0.4,
+                    pointRadius: 3,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#fff', font: { family: 'Share Tech Mono', size: 9 }, padding: 10 } },
+                    title: { display: true, text: 'MONTHLY PLAYS + SKIP RATE', color: '#ffff00', font: { family: 'Orbitron', size: 10 }, padding: { bottom: 10 } },
+                    tooltip: tooltipDefaults,
+                },
+                scales: {
+                    x:  { ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 8 }, maxRotation: 45 }, grid: { color: '#ffffff0a' } },
+                    y:  { ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } },
+                    y1: { position: 'right', ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 9 } }, grid: { drawOnChartArea: false }, min: 0, max: 100 },
+                }
+            }
+        });
+
+        // Hour distribution
+        new Chart(document.getElementById('hourChart'), {
+            type: 'bar',
+            data: {
+                labels: Array.from({length: 24}, (_, i) => `${String(i).padStart(2,'0')}:00`),
+                datasets: [{
+                    label: 'Plays',
+                    data: {{ hour_dist | tojson }},
+                    backgroundColor: '#00ffff44',
+                    borderColor: '#00ffff',
+                    borderWidth: 1,
+                    borderRadius: 2,
                 }]
             },
             options: {
@@ -441,22 +768,20 @@
                 maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false },
-                    tooltip: {
-                        backgroundColor: '#111',
-                        borderColor: '#ff00ff',
-                        borderWidth: 1,
-                        titleColor: '#00ffff',
-                        bodyColor: '#fff',
-                        titleFont: { family: 'Share Tech Mono' },
-                        bodyFont:  { family: 'Share Tech Mono' },
-                    }
+                    title: { display: true, text: 'PLAYS BY HOUR', color: '#ffff00', font: { family: 'Orbitron', size: 10 }, padding: { bottom: 10 } },
+                    tooltip: tooltipDefaults,
                 },
                 scales: {
-                    x: { ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 8 }, maxRotation: 45 }, grid: { color: '#ffffff0a' } },
+                    x: { ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 7 }, maxRotation: 45 }, grid: { color: '#ffffff0a' } },
                     y: { ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } }
                 }
             }
         });
+
+        function toggleInfo() {
+    document.getElementById('infoBody').classList.toggle('open');
+    document.getElementById('infoArrow').classList.toggle('open');
+}
     </script>
     {% endif %}
 </body>

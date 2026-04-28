@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TOP ITEMS // RAVE FM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Share Tech Mono', monospace; min-height: 100vh; background: #000; color: #fff; padding: 40px 20px; }
+        .scanlines { pointer-events: none; position: fixed; inset: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 4px); z-index: 10; }
+        .bg { position: fixed; inset: 0; background: radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%), #000; animation: bgshift 6s ease-in-out infinite alternate; z-index: 0; }
+        @keyframes bgshift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(180deg); } }
+        .content { position: relative; z-index: 5; max-width: 1100px; margin: 0 auto; }
+        h1 { font-family: 'Orbitron', sans-serif; font-size: 2.5rem; font-weight: 900; background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff); background-size: 300% 100%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: rainbowShift 4s linear infinite; filter: drop-shadow(0 0 12px #ff00ff); letter-spacing: 4px; margin-bottom: 8px; }
+        @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+        .subtitle { color: #00ffff; text-shadow: 0 0 8px #00ffff; letter-spacing: 4px; font-size: 0.75rem; margin-bottom: 40px; }
+        .nav { display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+        .nav a { color: #ff00aa; text-decoration: none; font-size: 0.75rem; letter-spacing: 2px; text-shadow: 0 0 8px #ff00aa; }
+        .nav a:hover { color: #fff; }
+        h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 4px; color: #ffff00; text-shadow: 0 0 10px #ffff0088; margin-bottom: 16px; border-bottom: 1px solid #ffff0033; padding-bottom: 8px; }
+        /* ── Tabs ── */
+        .tab-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 28px;
+            flex-wrap: wrap;
+        }
+        .tab-btn {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff33;
+            border-radius: 4px;
+            padding: 10px 20px;
+            color: #ff00aa88;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover { border-color: #ff00ff; color: #ff00ff; }
+        .tab-btn.active { border-color: #ff00ff; color: #ff00ff; background: rgba(255,0,255,0.1); box-shadow: 0 0 12px #ff00ff33; }
+        /* ── Section toggle ── */
+        .section-toggle {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+        .sec-btn {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #00ffff33;
+            border-radius: 4px;
+            padding: 8px 18px;
+            color: #00ffff88;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .sec-btn.active { border-color: #00ffff; color: #00ffff; background: rgba(0,255,255,0.08); }
+        /* ── Grid ── */
+        .items-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+        /* ── Item card ── */
+        .item-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff22;
+            border-radius: 10px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .item-card:hover { border-color: #ff00ff66; background: rgba(255,0,255,0.05); transform: translateY(-2px); }
+        .item-card .rank-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.65rem;
+            color: #ff00ff;
+            text-shadow: 0 0 8px #ff00ff;
+            letter-spacing: 1px;
+        }
+        .item-card img {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #ff00ff22;
+        }
+        .item-card .img-ph {
+            width: 100%;
+            aspect-ratio: 1;
+            background: #ff00ff11;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+        }
+        .item-card .item-name {
+            font-size: 0.78rem;
+            color: #fff;
+            letter-spacing: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .item-card .item-sub {
+            font-size: 0.65rem;
+            color: #00ffff;
+            letter-spacing: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .item-card .item-genres {
+            font-size: 0.6rem;
+            color: #888;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* ── Own rank comparison ── */
+        .own-rank-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 2px;
+        }
+        .own-rank-badge {
+            font-size: 0.58rem;
+            letter-spacing: 1px;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .own-rank-badge.match  { background: #00ff8822; color: #00ff88; border: 1px solid #00ff8844; }
+        .own-rank-badge.higher { background: #ffff0022; color: #ffff00; border: 1px solid #ffff0044; }
+        .own-rank-badge.lower  { background: #ff00aa22; color: #ff00aa; border: 1px solid #ff00aa44; }
+        .own-rank-badge.untracked { background: #ffffff11; color: #555; border: 1px solid #ffffff22; }
+        /* ── List view (for tracks) ── */
+        .items-list { margin-bottom: 40px; }
+        .list-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 10px 12px;
+            border-bottom: 1px solid #ffffff08;
+            transition: background 0.15s;
+        }
+        .list-item:hover { background: #ffffff05; }
+        .list-item .li-rank { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: #ff00ff; width: 28px; flex-shrink: 0; text-align: right; }
+        .list-item img { width: 44px; height: 44px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
+        .list-item .li-img-ph { width: 44px; height: 44px; border-radius: 4px; background: #ff00ff11; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+        .list-item .li-info { flex: 1; min-width: 0; }
+        .list-item .li-name { font-size: 0.8rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .list-item .li-sub  { font-size: 0.65rem; color: #00ffff; letter-spacing: 1px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .list-item .li-meta { margin-left: auto; text-align: right; flex-shrink: 0; }
+        .list-item .li-own  { font-size: 0.62rem; letter-spacing: 1px; margin-top: 3px; }
+        /* ── Divergence note ── */
+        .divergence-note {
+            background: rgba(255,255,0,0.05);
+            border: 1px solid #ffff0022;
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 28px;
+            font-size: 0.68rem;
+            color: #888;
+            letter-spacing: 1px;
+            line-height: 1.7;
+        }
+        .divergence-note strong { color: #ffff00; }
+        .hidden { display: none; }
+        @media (max-width: 700px) {
+            .items-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/stats">◈ STATS</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+        <h1>TOP ITEMS</h1>
+        <p class="subtitle">◈ SPOTIFY'S AFFINITY VS YOUR TRACKED DATA ◈</p>
+
+        <div class="divergence-note">
+            <strong>◈ SPOTIFY RANK</strong> is based on Spotify's own affinity algorithm — it weights recency and completion rate, not just raw plays.<br>
+            <strong>◈ YOUR RANK</strong> is from your tracked play history in this app. Differences reveal where Spotify's model diverges from your actual listening patterns.
+        </div>
+
+        <!-- Time range tabs -->
+        <div class="tab-row">
+            <button class="tab-btn active" onclick="setRange('short')">⚡ LAST 4 WEEKS</button>
+            <button class="tab-btn"        onclick="setRange('medium')">◈ LAST 6 MONTHS</button>
+            <button class="tab-btn"        onclick="setRange('long')">∞ ALL TIME</button>
+        </div>
+
+        <!-- Section toggle -->
+        <div class="section-toggle">
+            <button class="sec-btn active" onclick="setSection('artists')">🎤 ARTISTS</button>
+            <button class="sec-btn"        onclick="setSection('tracks')">🎵 TRACKS</button>
+        </div>
+
+        <!-- Artists -->
+        <div id="section-artists">
+            <h2>🎤 TOP ARTISTS</h2>
+            {% for range_key, range_label in [('short','4 WEEKS'), ('medium','6 MONTHS'), ('long','ALL TIME')] %}
+            <div class="items-grid range-artists range-{{ range_key }}" {% if range_key != 'short' %}style="display:none"{% endif %}>
+                {% for item in artists[range_key] %}
+                <div class="item-card">
+                    <div class="rank-badge">#{{ item.rank }}</div>
+                    {% if item.image %}
+                    <img src="{{ item.image }}" alt="{{ item.name }}">
+                    {% else %}
+                    <div class="img-ph">🎤</div>
+                    {% endif %}
+                    <div class="item-name">{{ item.name }}</div>
+                    {% if item.genres %}
+                    <div class="item-genres">{{ item.genres }}</div>
+                    {% endif %}
+                    <div class="own-rank-row">
+                        {% if item.own_rank %}
+                            {% set diff = item.rank - item.own_rank %}
+                            {% if diff == 0 %}
+                                <span class="own-rank-badge match">✓ #{{ item.own_rank }} YOURS</span>
+                            {% elif diff > 0 %}
+                                <span class="own-rank-badge higher">↑ #{{ item.own_rank }} YOURS</span>
+                            {% else %}
+                                <span class="own-rank-badge lower">↓ #{{ item.own_rank }} YOURS</span>
+                            {% endif %}
+                            {% if item.own_plays %}
+                            <span style="font-size:0.58rem; color:#555;">{{ item.own_plays }}p</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="own-rank-badge untracked">NOT TRACKED</span>
+                        {% endif %}
+                    </div>
+                    <a href="/artist/{{ item.name | urlencode }}" style="font-size:0.6rem; color:#ff00aa88; text-decoration:none; letter-spacing:1px;">→ DEEP DIVE</a>
+                </div>
+                {% else %}
+                <p style="color:#555; font-size:0.75rem; letter-spacing:2px; grid-column:1/-1;">// NO DATA FOR THIS TIME RANGE //</p>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Tracks -->
+        <div id="section-tracks" class="hidden">
+            <h2>🎵 TOP TRACKS</h2>
+            {% for range_key, range_label in [('short','4 WEEKS'), ('medium','6 MONTHS'), ('long','ALL TIME')] %}
+            <div class="items-list range-tracks range-{{ range_key }}" {% if range_key != 'short' %}style="display:none"{% endif %}>
+                {% for item in tracks[range_key] %}
+                <div class="list-item">
+                    <div class="li-rank">#{{ item.rank }}</div>
+                    {% if item.image %}
+                    <img src="{{ item.image }}" alt="{{ item.name }}">
+                    {% else %}
+                    <div class="li-img-ph">🎵</div>
+                    {% endif %}
+                    <div class="li-info">
+                        <div class="li-name">{{ item.name }}</div>
+                        <div class="li-sub">{{ item.artists }}</div>
+                    </div>
+                    <div class="li-meta">
+                        {% if item.own_rank %}
+                            {% set diff = item.rank - item.own_rank %}
+                            {% if diff == 0 %}
+                                <span class="own-rank-badge match">✓ #{{ item.own_rank }}</span>
+                            {% elif diff > 0 %}
+                                <span class="own-rank-badge higher">↑ #{{ item.own_rank }}</span>
+                            {% else %}
+                                <span class="own-rank-badge lower">↓ #{{ item.own_rank }}</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="own-rank-badge untracked">UNTRACKED</span>
+                        {% endif %}
+                        <a href="{{ item.spotify_url }}" target="_blank" style="display:block; font-size:0.6rem; color:#ff00aa44; text-decoration:none; margin-top:4px; letter-spacing:1px;">↗ SPOTIFY</a>
+                    </div>
+                </div>
+                {% else %}
+                <p style="color:#555; font-size:0.75rem; letter-spacing:2px;">// NO DATA FOR THIS TIME RANGE //</p>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        let currentRange   = 'short';
+        let currentSection = 'artists';
+
+        function setRange(range) {
+            currentRange = range;
+            document.querySelectorAll('.tab-btn').forEach((b, i) => {
+                b.classList.toggle('active', ['short','medium','long'][i] === range);
+            });
+            updateVisibility();
+        }
+
+        function setSection(section) {
+            currentSection = section;
+            document.querySelectorAll('.sec-btn').forEach((b, i) => {
+                b.classList.toggle('active', ['artists','tracks'][i] === section);
+            });
+            document.getElementById('section-artists').classList.toggle('hidden', section !== 'artists');
+            document.getElementById('section-tracks').classList.toggle('hidden',  section !== 'tracks');
+            updateVisibility();
+        }
+
+        function updateVisibility() {
+            ['short','medium','long'].forEach(r => {
+                document.querySelectorAll(`.range-artists.range-${r}`).forEach(el => {
+                    el.style.display = (r === currentRange) ? 'grid' : 'none';
+                });
+                document.querySelectorAll(`.range-tracks.range-${r}`).forEach(el => {
+                    el.style.display = (r === currentRange) ? 'block' : 'none';
+                });
+            });
+        }
+    </script>
+</body>
+</html>

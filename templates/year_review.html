@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% if selected_year %}{{ selected_year }} REVIEW{% else %}YEAR IN REVIEW{% endif %} // RAVE FM</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Share Tech Mono', monospace; min-height: 100vh; background: #000; color: #fff; padding: 40px 20px; }
+        .scanlines { pointer-events: none; position: fixed; inset: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 4px); z-index: 10; }
+        .bg { position: fixed; inset: 0; background: radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%), #000; animation: bgshift 6s ease-in-out infinite alternate; z-index: 0; }
+        @keyframes bgshift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(180deg); } }
+        .content { position: relative; z-index: 5; max-width: 1100px; margin: 0 auto; }
+        @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+        .nav { display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+        .nav a { color: #ff00aa; text-decoration: none; font-size: 0.75rem; letter-spacing: 2px; text-shadow: 0 0 8px #ff00aa; }
+        .nav a:hover { color: #fff; }
+        h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 4px; color: #ffff00; text-shadow: 0 0 10px #ffff0088; margin-bottom: 16px; border-bottom: 1px solid #ffff0033; padding-bottom: 8px; }
+        /* ── Year selector ── */
+        .year-selector {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 40px;
+        }
+        .year-btn {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            padding: 12px 24px;
+            border: 1px solid #ff00ff33;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.03);
+            color: #ff00aa88;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .year-btn:hover { border-color: #ff00ff; color: #ff00ff; background: rgba(255,0,255,0.08); }
+        .year-btn.active { border-color: #ff00ff; color: #ff00ff; background: rgba(255,0,255,0.15); box-shadow: 0 0 20px #ff00ff33; }
+        /* ── Hero title ── */
+        .review-hero {
+            text-align: center;
+            margin-bottom: 56px;
+            padding: 48px 32px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid #ff00ff22;
+            border-radius: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+        .review-hero::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at center, #ff00ff11 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .review-hero .rh-year {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 6rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowShift 4s linear infinite;
+            filter: drop-shadow(0 0 20px #ff00ff);
+            letter-spacing: 8px;
+            line-height: 1;
+            margin-bottom: 12px;
+        }
+        .review-hero .rh-sub {
+            font-size: 0.75rem;
+            color: #00ffff88;
+            letter-spacing: 6px;
+        }
+        .review-hero .rh-personality {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            color: #ffff00;
+            text-shadow: 0 0 16px #ffff0088;
+            letter-spacing: 4px;
+            margin-top: 16px;
+        }
+        /* ── Big numbers ── */
+        .big-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 48px;
+        }
+        .big-stat {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff33;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+        }
+        .big-stat .bs-val {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            font-weight: 900;
+            text-shadow: 0 0 20px currentColor;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+        .big-stat .bs-label {
+            font-size: 0.62rem;
+            letter-spacing: 3px;
+            color: #888;
+        }
+        /* ── Section ── */
+        .section { margin-bottom: 56px; }
+        /* ── Top five grid ── */
+        .top-five {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+        }
+        .top-five-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff22;
+            border-radius: 10px;
+            padding: 14px;
+            text-align: center;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .top-five-card:hover { border-color: #ff00ff66; transform: translateY(-2px); }
+        .top-five-card .tfc-rank {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.65rem;
+            color: #ff00ff;
+            letter-spacing: 2px;
+        }
+        .top-five-card img {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #ffffff11;
+        }
+        .top-five-card .tfc-img-ph {
+            width: 100%;
+            aspect-ratio: 1;
+            background: #ff00ff11;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+        }
+        .top-five-card .tfc-name {
+            font-size: 0.72rem;
+            color: #fff;
+            letter-spacing: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .top-five-card .tfc-plays {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.68rem;
+            color: #00ffff;
+        }
+        /* ── Month heatmap ── */
+        .month-bars {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 8px;
+            align-items: flex-end;
+            height: 160px;
+            margin-bottom: 8px;
+        }
+        .month-bar-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            height: 100%;
+            gap: 6px;
+        }
+        .month-bar {
+            width: 100%;
+            border-radius: 4px 4px 0 0;
+            min-height: 4px;
+            transition: opacity 0.2s;
+            background: linear-gradient(180deg, #ff00ff, #aa00ff);
+            box-shadow: 0 0 8px #ff00ff44;
+        }
+        .month-bar-wrap:hover .month-bar { opacity: 0.7; }
+        .month-label { font-size: 0.6rem; color: #888; letter-spacing: 1px; }
+        .month-count { font-size: 0.58rem; color: #ff00ff; letter-spacing: 1px; }
+        /* ── Two col ── */
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 48px; }
+        /* ── Track list ── */
+        .track-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 9px 0;
+            border-bottom: 1px solid #ffffff08;
+        }
+        .track-item img { width: 40px; height: 40px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
+        .track-item .ti-ph { width: 40px; height: 40px; border-radius: 4px; background: #ff00ff11; flex-shrink: 0; }
+        .track-item .ti-info { flex: 1; min-width: 0; }
+        .track-item .ti-name { font-size: 0.78rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .track-item .ti-artist { font-size: 0.62rem; color: #00ffff; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .track-item .ti-plays { font-family: 'Orbitron', sans-serif; font-size: 0.72rem; color: #ff00aa; flex-shrink: 0; }
+        /* ── Mood bars ── */
+        .mood-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 0;
+            border-bottom: 1px solid #ffffff08;
+        }
+        .mood-row .mr-name  { font-size: 0.7rem; color: #fff; width: 110px; flex-shrink: 0; }
+        .mood-row .mr-bar   { flex: 1; height: 6px; background: #ffffff11; border-radius: 99px; overflow: hidden; }
+        .mood-row .mr-fill  { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #ff00ff, #00ffff); }
+        .mood-row .mr-count { font-size: 0.65rem; color: #888; width: 40px; text-align: right; flex-shrink: 0; }
+        /* ── Genre pills ── */
+        .genre-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+        .genre-pill {
+            padding: 4px 12px;
+            border-radius: 99px;
+            font-size: 0.65rem;
+            letter-spacing: 1px;
+            background: #ff00ff11;
+            border: 1px solid #ff00ff33;
+            color: #ff00ff;
+        }
+        /* ── Stat cards ── */
+        .stat-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff33; border-radius: 10px; padding: 18px; text-align: center; }
+        .stat-value { font-family: 'Orbitron', sans-serif; font-size: 1.2rem; font-weight: 900; color: #00ffff; text-shadow: 0 0 12px #00ffff; }
+        .stat-label { font-size: 0.6rem; letter-spacing: 2px; color: #ff00aa; margin-top: 6px; }
+        .stats-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 32px; }
+        .stats-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 32px; }
+        /* ── First / last track ── */
+        .first-last-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 48px; }
+        .fl-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff22;
+            border-radius: 10px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .fl-card img { width: 56px; height: 56px; border-radius: 6px; object-fit: cover; flex-shrink: 0; border: 1px solid #ff00ff33; }
+        .fl-card .fl-ph { width: 56px; height: 56px; border-radius: 6px; background: #ff00ff11; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+        .fl-card .fl-label { font-size: 0.6rem; letter-spacing: 3px; color: #ff00aa; margin-bottom: 4px; }
+        .fl-card .fl-name  { font-size: 0.82rem; color: #fff; letter-spacing: 1px; }
+        .fl-card .fl-artist { font-size: 0.65rem; color: #00ffff; margin-top: 2px; }
+        .fl-card .fl-date  { font-size: 0.6rem; color: #555; margin-top: 3px; }
+        /* ── New artists ── */
+        .new-artist-list { display: flex; flex-direction: column; gap: 0; }
+        .na-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #ffffff08;
+            font-size: 0.78rem;
+        }
+        .na-item a { color: #00ffff; text-decoration: none; }
+        .na-item a:hover { color: #fff; }
+        .na-item .na-plays { font-size: 0.65rem; color: #ff00aa; }
+        /* ── Ghost liked ── */
+        .ghost-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid #ffffff08;
+            opacity: 0.6;
+        }
+        .ghost-item img { width: 36px; height: 36px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
+        .ghost-item .gi-ph { width: 36px; height: 36px; border-radius: 4px; background: #ffffff08; flex-shrink: 0; }
+        .ghost-item .gi-name   { font-size: 0.75rem; color: #888; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ghost-item .gi-artist { font-size: 0.62rem; color: #555; }
+        /* ── Skip delta ── */
+        .delta-up   { color: #ff00aa; }
+        .delta-down { color: #00ff88; }
+        /* ── Chart card ── */
+        .chart-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff22; border-radius: 10px; padding: 20px; }
+        .chart-card canvas { max-height: 220px; }
+        /* ── Empty ── */
+        .empty { color: #555; font-size: 0.75rem; letter-spacing: 2px; padding: 16px 0; }
+        @media (max-width: 900px) {
+            .big-stats  { grid-template-columns: repeat(2, 1fr); }
+            .top-five   { grid-template-columns: repeat(3, 1fr); }
+            .two-col    { grid-template-columns: 1fr; }
+            .first-last-grid { grid-template-columns: 1fr; }
+            .stats-grid-4 { grid-template-columns: repeat(2, 1fr); }
+            .stats-grid-3 { grid-template-columns: repeat(2, 1fr); }
+            .month-bars { height: 120px; }
+        }
+        @media (max-width: 600px) {
+            .top-five { grid-template-columns: repeat(2, 1fr); }
+            .month-label { font-size: 0.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/stats">◈ STATS</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+
+        <h2 style="border:none; margin-bottom:8px;">◈ YEAR IN REVIEW</h2>
+        <p style="font-size:0.65rem; color:#555; letter-spacing:2px; margin-bottom:24px;">YOUR LISTENING WRAPPED — ANY YEAR, ANY TIME</p>
+
+        <!-- Year selector -->
+        <div class="year-selector">
+            {% for y in available_years %}
+            <a href="/review/{{ y }}" class="year-btn {% if y == selected_year %}active{% endif %}">{{ y }}</a>
+            {% endfor %}
+        </div>
+
+        {% if not selected_year %}
+        <p style="color:#555; font-size:0.8rem; letter-spacing:2px; text-align:center; padding:60px 0;">// SELECT A YEAR TO BEGIN //</p>
+
+        {% elif not data %}
+        <p style="color:#555; font-size:0.8rem; letter-spacing:2px; text-align:center; padding:60px 0;">// NO DATA FOR {{ selected_year }} //</p>
+
+        {% else %}
+
+        <!-- Hero -->
+        <div class="review-hero">
+            <div class="rh-year">{{ selected_year }}</div>
+            <div class="rh-sub">◈ YOUR YEAR IN MUSIC ◈</div>
+            <div class="rh-personality">{{ data.personality }}</div>
+        </div>
+
+        <!-- Big numbers -->
+        <div class="big-stats">
+            <div class="big-stat">
+                <div class="bs-val" style="color:#ff00ff;">{{ data.total }}</div>
+                <div class="bs-label">TRACKS PLAYED</div>
+            </div>
+            <div class="big-stat">
+                <div class="bs-val" style="color:#00ffff;">{{ data.hours }}h</div>
+                <div class="bs-label">HOURS LISTENED</div>
+            </div>
+            <div class="big-stat">
+                <div class="bs-val" style="color:#ffff00;">{{ data.unique_artists }}</div>
+                <div class="bs-label">UNIQUE ARTISTS</div>
+            </div>
+            <div class="big-stat">
+                <div class="bs-val" style="color:#00ff88;">{{ data.new_artist_count }}</div>
+                <div class="bs-label">NEW ARTISTS DISCOVERED</div>
+            </div>
+            <div class="big-stat">
+                <div class="bs-val" style="color:#ff00aa;">{{ data.unique_tracks }}</div>
+                <div class="bs-label">UNIQUE TRACKS</div>
+            </div>
+            <div class="big-stat">
+                <div class="bs-val" style="color:#ff6600;">{{ data.days }}</div>
+                <div class="bs-label">DAYS WITH MUSIC</div>
+            </div>
+            <div class="big-stat">
+                <div class="bs-val" style="color:#aa00ff;">{{ data.skip_rate }}%</div>
+                <div class="bs-label">SKIP RATE
+                    {% if data.skip_rate_delta is not none %}
+                    <span class="{% if data.skip_rate_delta > 0 %}delta-up{% else %}delta-down{% endif %}">
+                        ({% if data.skip_rate_delta > 0 %}+{% endif %}{{ data.skip_rate_delta }}% vs {{ data.prior_year }})
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="big-stat">
+                <div class="bs-val" style="color:#00aaff;">{{ data.new_liked_count }}</div>
+                <div class="bs-label">NEW LIKED SONGS ADDED</div>
+            </div>
+        </div>
+
+        <!-- Top mood + genre hero -->
+        <div class="two-col section">
+            <div class="stat-card" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px; border-color:#ff00ff44;">
+                <div style="font-size:0.6rem; letter-spacing:4px; color:#ff00aa; margin-bottom:12px;">◈ DOMINANT VIBE</div>
+                <div style="font-family:'Orbitron',sans-serif; font-size:2rem; font-weight:900; background:linear-gradient(90deg,#ff00ff,#00ffff,#ffff00,#ff00ff); background-size:300% 100%; -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; animation:rainbowShift 4s linear infinite; letter-spacing:4px;">{{ data.top_mood }}</div>
+            </div>
+            <div class="stat-card" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px; border-color:#00ffff44;">
+                <div style="font-size:0.6rem; letter-spacing:4px; color:#ff00aa; margin-bottom:12px;">◈ TOP GENRE</div>
+                <div style="font-family:'Orbitron',sans-serif; font-size:1.4rem; font-weight:900; color:#00ffff; text-shadow:0 0 20px #00ffff; letter-spacing:3px;">{{ data.top_genre | upper }}</div>
+            </div>
+        </div>
+
+        <!-- Top 5 artists -->
+        <div class="section">
+            <h2>🎤 TOP 5 ARTISTS</h2>
+            <div class="top-five">
+                {% for a in data.top_artists %}
+                <a href="/artist/{{ a.name | urlencode }}" class="top-five-card">
+                    <div class="tfc-rank">#{{ loop.index }}</div>
+                    {% if a.image %}
+                    <img src="{{ a.image }}" alt="{{ a.name }}">
+                    {% else %}
+                    <div class="tfc-img-ph">🎤</div>
+                    {% endif %}
+                    <div class="tfc-name">{{ a.name }}</div>
+                    <div class="tfc-plays">{{ a.plays }} plays</div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Top 5 tracks -->
+        <div class="section">
+            <h2>🎵 TOP 5 TRACKS</h2>
+            <div class="top-five">
+                {% for t in data.top_tracks %}
+                <div class="top-five-card">
+                    <div class="tfc-rank">#{{ loop.index }}</div>
+                    {% if t.art %}
+                    <img src="{{ t.art }}" alt="{{ t.name }}">
+                    {% else %}
+                    <div class="tfc-img-ph">🎵</div>
+                    {% endif %}
+                    <div class="tfc-name">{{ t.name }}</div>
+                    <div class="tfc-plays">{{ t.plays }} plays</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Month by month heatmap -->
+        <div class="section">
+            <h2>📅 MONTH BY MONTH</h2>
+            <div class="month-bars">
+                {% for m in data.monthly_data %}
+                <div class="month-bar-wrap">
+                    <div class="month-count">{{ m.plays if m.plays > 0 else '' }}</div>
+                    <div class="month-bar" style="height:{{ (m.plays / data.max_monthly * 130) | round | int }}px;"></div>
+                </div>
+                {% endfor %}
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(12,1fr); gap:8px; margin-top:4px;">
+                {% for m in data.monthly_data %}
+                <div class="month-label" style="text-align:center;">{{ m.month }}</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- First and last track -->
+        <div class="first-last-grid">
+            <div class="fl-card">
+                {% if data.first_track.album_art_url %}
+                <img src="{{ data.first_track.album_art_url }}" alt="art">
+                {% else %}
+                <div class="fl-ph">🌱</div>
+                {% endif %}
+                <div>
+                    <div class="fl-label">🌱 FIRST TRACK OF {{ selected_year }}</div>
+                    <div class="fl-name">{{ data.first_track.track_name }}</div>
+                    <div class="fl-artist">{{ data.first_track.artists }}</div>
+                    <div class="fl-date">{{ data.first_track.listened_at.strftime("%B %d, %Y · %H:%M") }}</div>
+                </div>
+            </div>
+            <div class="fl-card">
+                {% if data.last_track.album_art_url %}
+                <img src="{{ data.last_track.album_art_url }}" alt="art">
+                {% else %}
+                <div class="fl-ph">🌙</div>
+                {% endif %}
+                <div>
+                    <div class="fl-label">🌙 LAST TRACK OF {{ selected_year }}</div>
+                    <div class="fl-name">{{ data.last_track.track_name }}</div>
+                    <div class="fl-artist">{{ data.last_track.artists }}</div>
+                    <div class="fl-date">{{ data.last_track.listened_at.strftime("%B %d, %Y · %H:%M") }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Listening stats deep dive -->
+        <div class="section">
+            <h2>⚡ LISTENING STATS</h2>
+            <div class="stats-grid-4">
+                <div class="stat-card">
+                    {% if data.biggest_day %}
+                    <div class="stat-value">{{ data.biggest_day[1] }}</div>
+                    <div class="stat-label">BIGGEST DAY · {{ data.biggest_day[0] }}</div>
+                    {% else %}
+                    <div class="stat-value">—</div>
+                    <div class="stat-label">BIGGEST DAY</div>
+                    {% endif %}
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ data.longest_noskip }}</div>
+                    <div class="stat-label">LONGEST NO-SKIP STREAK</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{% if data.peak_hour is not none %}{{ "%02d:00" | format(data.peak_hour) }}{% else %}—{% endif %}</div>
+                    <div class="stat-label">PEAK HOUR</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ data.peak_dow or "—" }}</div>
+                    <div class="stat-label">PEAK DAY</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ data.night_pct }}%</div>
+                    <div class="stat-label">🌙 NIGHT OWL</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ data.morning_pct }}%</div>
+                    <div class="stat-label">🌅 MORNING</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ data.weekend_pct }}%</div>
+                    <div class="stat-label">📅 WEEKEND</div>
+                </div>
+                <div class="stat-card">
+                    {% if data.most_skipped %}
+                    <div class="stat-value" style="font-size:0.75rem; color:#ff00aa;">{{ data.most_skipped[0][:20] }}{% if data.most_skipped[0] | length > 20 %}…{% endif %}</div>
+                    <div class="stat-label">MOST SKIPPED ({{ data.most_skipped[1] }}x)</div>
+                    {% else %}
+                    <div class="stat-value">—</div>
+                    <div class="stat-label">MOST SKIPPED</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% if data.longest_gap > 0 and data.comeback_date %}
+            <div class="stat-card" style="margin-top:0; padding:16px 20px; display:flex; align-items:center; gap:16px;">
+                <div style="font-size:1.4rem;">📻</div>
+                <div>
+                    <div style="font-size:0.62rem; letter-spacing:3px; color:#ff00aa; margin-bottom:3px;">BIGGEST COMEBACK</div>
+                    <div style="font-size:0.78rem; color:#fff;">You went <span style="color:#ffff00; font-family:'Orbitron',sans-serif;">{{ data.longest_gap }}</span> days without music — then came back on <span style="color:#00ffff;">{{ data.comeback_date }}</span></div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Hour chart -->
+        <div class="section">
+            <h2>🕐 LISTENING BY HOUR</h2>
+            <div class="chart-card">
+                <canvas id="hourChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Mood breakdown -->
+        {% if data.mood_breakdown %}
+        <div class="section">
+            <h2>🎵 MOOD BREAKDOWN</h2>
+            {% set max_mood = data.mood_breakdown[0].count %}
+            {% for m in data.mood_breakdown %}
+            <div class="mood-row">
+                <div class="mr-name">{{ m.mood }}</div>
+                <div class="mr-bar">
+                    <div class="mr-fill" style="width:{{ (m.count / max_mood * 100) | round | int }}%"></div>
+                </div>
+                <div class="mr-count">{{ m.count }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Top genres -->
+        {% if data.top_genres %}
+        <div class="section">
+            <h2>🎸 TOP GENRES</h2>
+            <div class="genre-pills">
+                {% for g in data.top_genres %}
+                <span class="genre-pill" style="opacity:{{ (g.count / data.top_genres[0].count * 0.7 + 0.3) | round(2) }};">{{ g.genre | upper }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- New artists discovered -->
+        <div class="two-col section">
+            <div>
+                <h2>✨ NEW ARTISTS DISCOVERED</h2>
+                <p style="font-size:0.65rem; color:#555; letter-spacing:1px; margin-bottom:16px;">Artists you played for the first time ever in {{ selected_year }}</p>
+                {% if data.new_artists_list %}
+                <div class="new-artist-list">
+                    {% for a in data.new_artists_list %}
+                    <div class="na-item">
+                        <a href="/artist/{{ a.name | urlencode }}">{{ a.name }}</a>
+                        <span class="na-plays">{{ a.plays }} plays</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="empty">// NO NEW ARTISTS THIS YEAR //</p>
+                {% endif %}
+            </div>
+
+            <!-- Songs played every month -->
+            <div>
+                <h2>🔁 ALWAYS ON REPEAT</h2>
+                <p style="font-size:0.65rem; color:#555; letter-spacing:1px; margin-bottom:16px;">Tracks you played every active month of {{ selected_year }}</p>
+                {% if data.every_month_tracks %}
+                {% for t in data.every_month_tracks %}
+                <div class="track-item">
+                    {% if t.art %}<img src="{{ t.art }}" alt="art">{% else %}<div class="ti-ph"></div>{% endif %}
+                    <div class="ti-info">
+                        <div class="ti-name">{{ t.name }}</div>
+                    </div>
+                    <div class="ti-plays">{{ t.plays }}x</div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p class="empty">// NONE THIS YEAR //</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Ghost liked songs -->
+        {% if data.ghost_liked %}
+        <div class="section">
+            <h2>👻 LIKED BUT NEVER PLAYED IN {{ selected_year }}</h2>
+            <p style="font-size:0.65rem; color:#555; letter-spacing:1px; margin-bottom:16px;">Songs sitting in your library you didn't get to this year</p>
+            {% for s in data.ghost_liked %}
+            <div class="ghost-item">
+                {% if s.album_art_url %}<img src="{{ s.album_art_url }}" alt="art">{% else %}<div class="gi-ph">👻</div>{% endif %}
+                <div style="flex:1; min-width:0;">
+                    <div class="gi-name">{{ s.track_name }}</div>
+                    <div class="gi-artist">{{ s.artists }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% endif %}
+    </div>
+
+    {% if data %}
+    <script>
+        const tooltipDefaults = {
+            backgroundColor: '#111',
+            borderColor: '#ff00ff',
+            borderWidth: 1,
+            titleColor: '#00ffff',
+            bodyColor: '#fff',
+            titleFont: { family: 'Share Tech Mono' },
+            bodyFont:  { family: 'Share Tech Mono' },
+        };
+        new Chart(document.getElementById('hourChart'), {
+            type: 'bar',
+            data: {
+                labels: Array.from({length: 24}, (_, i) => `${String(i).padStart(2,'0')}:00`),
+                datasets: [{
+                    label: 'Plays',
+                    data: {{ data.hour_dist | tojson }},
+                    backgroundColor: '#ff00ff44',
+                    borderColor: '#ff00ff',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: 'PLAYS BY HOUR OF DAY', color: '#ffff00', font: { family: 'Orbitron', size: 10 }, padding: { bottom: 10 } },
+                    tooltip: tooltipDefaults,
+                },
+                scales: {
+                    x: { ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 7 }, maxRotation: 45 }, grid: { color: '#ffffff0a' } },
+                    y: { ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } }
+                }
+            }
+        });
+    </script>
+    {% endif %}
+</body>
+</html>

@@ -16,7 +16,7 @@ from sqlalchemy import func, select, case
 from collections import defaultdict, Counter, namedtuple
 
 from database import init_db, AsyncSessionLocal
-from models import TrackPlay, ArtistCache, ArtistSpotifyID
+from models import TrackPlay, ArtistCache, ArtistSpotifyID, LikedSong
 from tracker import (
     current_track_state, update_state, is_new_track,
     commit_previous_track, get_or_fetch_genre, was_skipped,
@@ -33,7 +33,8 @@ SPOTIFY_AUTH_URL        = "https://accounts.spotify.com/authorize"
 SPOTIFY_TOKEN_URL       = "https://accounts.spotify.com/api/token"
 SPOTIFY_NOW_PLAYING_URL = "https://api.spotify.com/v1/me/player/currently-playing"
 
-SCOPES = "user-read-currently-playing user-read-playback-state user-read-recently-played user-top-read"
+SCOPES = "user-read-currently-playing user-read-playback-state user-read-recently-played user-top-read user-follow-read"
+
 
 token_store    = {}
 poller_running = False
@@ -1628,13 +1629,21 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
         })
 
     # Build links
+ # Build links — deduplicate track names within each connection
     links = []
     for (a1, a2), data in connections.items():
+        # Deduplicate track names case-insensitively
+        seen_tracks  = set()
+        unique_tracks = []
+        for track in data["tracks"]:
+            if track.lower().strip() not in seen_tracks:
+                seen_tracks.add(track.lower().strip())
+                unique_tracks.append(track)
         links.append({
             "source": a1,
             "target": a2,
-            "count":  data["count"],
-            "tracks": list(data["tracks"]),
+            "count":  len(unique_tracks),
+            "tracks": unique_tracks,
         })
 
     import json
@@ -1762,117 +1771,6 @@ async def time_machine(request: Request, db: AsyncSession = Depends(get_db)):
     })
 
 
-@app.get("/time-machine/{date}", response_class=HTMLResponse)
-async def time_machine_date(request: Request, date: str, db: AsyncSession = Depends(get_db)):
-    if "access_token" not in token_store:
-        return RedirectResponse("/")
-
-    # Get all available dates for the picker
-    dates_q = (
-        select(func.strftime('%Y-%m-%d', TrackPlay.listened_at).label("day"))
-        .group_by(func.strftime('%Y-%m-%d', TrackPlay.listened_at))
-        .order_by(func.strftime('%Y-%m-%d', TrackPlay.listened_at).desc())
-    )
-    available_dates = [r.day for r in (await db.execute(dates_q)).fetchall()]
-
-    # Get plays for selected date
-    plays_q = (
-        select(TrackPlay)
-        .where(func.strftime('%Y-%m-%d', TrackPlay.listened_at) == date)
-        .order_by(TrackPlay.listened_at.asc())
-    )
-    plays = (await db.execute(plays_q)).scalars().fetchall()
-
-    stats = None
-    if plays:
-        total         = len(plays)
-        skips         = sum(1 for p in plays if p.was_skipped)
-        minutes       = round(sum(p.progress_ms for p in plays) / 60000, 1)
-        skip_rate     = round(skips / total * 100, 1) if total else 0
-
-        # Top artist
-        artist_counter = Counter()
-        for p in plays:
-            if p.artists:
-                for a in p.artists.split(","):
-                    a = a.strip()
-                    if a:
-                        artist_counter[a] += 1
-        top_artist = artist_counter.most_common(1)[0] if artist_counter else None
-
-        # Top track
-        track_counter = Counter(p.track_name for p in plays)
-        top_track     = track_counter.most_common(1)[0] if track_counter else None
-
-        # Dominant mood
-        mood_counter  = Counter(p.auto_mood for p in plays if p.auto_mood and p.auto_mood != "UNKNOWN")
-        dominant_mood = mood_counter.most_common(1)[0][0] if mood_counter else "UNKNOWN"
-
-        # Top genre
-        genre_counter = Counter()
-        for p in plays:
-            if p.primary_genre:
-                for g in p.primary_genre.split(","):
-                    g = g.strip().lower()
-                    if g:
-                        genre_counter[g] += 1
-        top_genre = genre_counter.most_common(1)[0][0] if genre_counter else None
-
-        # Peak hour
-        hour_counter = Counter(p.hour_of_day for p in plays if p.hour_of_day is not None)
-        peak_hour    = hour_counter.most_common(1)[0] if hour_counter else None
-
-        # First and last track
-        first_track = plays[0]
-        last_track  = plays[-1]
-
-        # Unique artists and tracks
-        unique_tracks  = len(set(p.track_id for p in plays))
-        unique_artists = len(set(
-            a.strip()
-            for p in plays if p.artists
-            for a in p.artists.split(",")
-            if a.strip()
-        ))
-
-        # Compare to average day
-        avg_plays_q = (
-            select(func.count().label("cnt"))
-            .select_from(TrackPlay)
-            .group_by(func.strftime('%Y-%m-%d', TrackPlay.listened_at))
-        )
-        all_day_counts = [r.cnt for r in (await db.execute(avg_plays_q)).fetchall()]
-        avg_plays      = round(sum(all_day_counts) / len(all_day_counts), 1) if all_day_counts else 0
-        vs_average     = round(((total - avg_plays) / avg_plays * 100), 1) if avg_plays else 0
-
-        stats = {
-            "total":         total,
-            "skips":         skips,
-            "skip_rate":     skip_rate,
-            "minutes":       minutes,
-            "top_artist":    top_artist,
-            "top_track":     top_track,
-            "dominant_mood": dominant_mood,
-            "top_genre":     top_genre,
-            "peak_hour":     peak_hour,
-            "first_track":   first_track,
-            "last_track":    last_track,
-            "unique_tracks":  unique_tracks,
-            "unique_artists": unique_artists,
-            "avg_plays":     avg_plays,
-            "vs_average":    vs_average,
-        }
-
-    return templates.TemplateResponse("time_machine.html", {
-        "request":         request,
-        "available_dates": available_dates,
-        "selected_date":   date,
-        "plays":           plays,
-        "stats":           stats,
-    })
-
-
-
 @app.get("/artist/{artist_name}", response_class=HTMLResponse)
 async def artist_deep_dive(request: Request, artist_name: str, db: AsyncSession = Depends(get_db)):
     if "access_token" not in token_store:
@@ -1881,18 +1779,19 @@ async def artist_deep_dive(request: Request, artist_name: str, db: AsyncSession 
     import urllib.parse
     artist_name = urllib.parse.unquote(artist_name)
 
-    # Get all plays featuring this artist
     plays_q = (
         select(TrackPlay)
-        .where(
-            TrackPlay.artists.ilike(f"{artist_name},%") |  # starts with artist
-            TrackPlay.artists.ilike(f"%, {artist_name},%") |  # middle
-            TrackPlay.artists.ilike(f"%, {artist_name}") |  # ends with artist
-            TrackPlay.artists.ilike(f"{artist_name}")  # exact match (solo artist)
-        )
+        .where(TrackPlay.artists.ilike(f"%{artist_name}%"))
         .order_by(TrackPlay.listened_at.asc())
     )
     plays = (await db.execute(plays_q)).scalars().fetchall()
+
+    # Filter to exact artist match
+    plays = [
+        p for p in plays
+        if any(a.strip().lower() == artist_name.lower()
+               for a in (p.artists or "").split(","))
+    ]
 
     if not plays:
         return templates.TemplateResponse("artist_dive.html", {
@@ -1901,17 +1800,15 @@ async def artist_deep_dive(request: Request, artist_name: str, db: AsyncSession 
             "found":       False,
         })
 
-    total      = len(plays)
-    skips      = sum(1 for p in plays if p.was_skipped)
-    skip_rate  = round(skips / total * 100, 1) if total else 0
-    minutes    = round(sum(p.progress_ms for p in plays) / 60000, 1)
-    completion = round((total - skips) / total * 100, 1) if total else 0
+    total     = len(plays)
+    skips     = sum(1 for p in plays if p.was_skipped)
+    completes = total - skips
+    skip_rate = round(skips / total * 100, 1) if total else 0
+    comp_rate = round(completes / total * 100, 1) if total else 0
+    minutes   = round(sum(p.progress_ms for p in plays) / 60000, 1)
+    hours     = round(minutes / 60, 2)
 
-    # First and most recent play
-    first_play  = plays[0]
-    latest_play = plays[-1]
-
-    # Streak
+    # ── Streak ────────────────────────────────────────────────────────────
     days_with_plays = sorted(set(p.listened_at.date() for p in plays))
     max_streak = temp_streak = 1
     for i in range(1, len(days_with_plays)):
@@ -1921,20 +1818,35 @@ async def artist_deep_dive(request: Request, artist_name: str, db: AsyncSession 
         else:
             temp_streak = 1
 
-    # Peak hour
-    hour_counter = Counter(p.hour_of_day for p in plays if p.hour_of_day is not None)
-    peak_hour    = hour_counter.most_common(1)[0][0] if hour_counter else None
+    # ── Current streak ────────────────────────────────────────────────────
+    today          = datetime.now(TIMEZONE).date()
+    yesterday      = today - timedelta(days=1)
+    current_streak = 0
+    for day in reversed(days_with_plays):
+        if day == today or day == yesterday:
+            current_streak += 1
+        elif (today - day).days <= current_streak + 1:
+            current_streak += 1
+        else:
+            break
 
-    # Peak day
-    dow_counter = Counter(p.day_of_week for p in plays if p.day_of_week)
-    peak_dow    = dow_counter.most_common(1)[0][0] if dow_counter else None
+    # ── Peak hour ─────────────────────────────────────────────────────────
+    hour_counter    = Counter(p.hour_of_day for p in plays if p.hour_of_day is not None)
+    peak_hour       = hour_counter.most_common(1)[0][0] if hour_counter else None
+    peak_hour_count = hour_counter.most_common(1)[0][1] if hour_counter else 0
+    hour_dist       = [hour_counter.get(h, 0) for h in range(24)]
 
-    # Mood breakdown
+    # ── Peak day ──────────────────────────────────────────────────────────
+    dow_counter    = Counter(p.day_of_week for p in plays if p.day_of_week)
+    peak_dow       = dow_counter.most_common(1)[0][0] if dow_counter else None
+    peak_dow_count = dow_counter.most_common(1)[0][1] if dow_counter else 0
+
+    # ── Mood breakdown ────────────────────────────────────────────────────
     mood_counter  = Counter(p.auto_mood for p in plays if p.auto_mood and p.auto_mood != "UNKNOWN")
     dominant_mood = mood_counter.most_common(1)[0][0] if mood_counter else "UNKNOWN"
-    mood_breakdown = dict(mood_counter.most_common(8))
+    mood_variety  = len(mood_counter)
 
-    # Genre
+    # ── Genre ─────────────────────────────────────────────────────────────
     genre_counter = Counter()
     for p in plays:
         if p.primary_genre:
@@ -1942,13 +1854,14 @@ async def artist_deep_dive(request: Request, artist_name: str, db: AsyncSession 
                 g = g.strip().lower()
                 if g:
                     genre_counter[g] += 1
-    top_genres = [g for g, _ in genre_counter.most_common(5)]
+    top_genres    = [g for g, _ in genre_counter.most_common(5)]
+    genre_variety = len(genre_counter)
 
-    # Track breakdown
-    track_plays  = Counter()
-    track_skips  = Counter()
-    track_art    = {}
-    track_album  = {}
+    # ── Track breakdown ───────────────────────────────────────────────────
+    track_plays = Counter()
+    track_skips = Counter()
+    track_art   = {}
+    track_album = {}
     for p in plays:
         track_plays[p.track_name]  += 1
         track_art[p.track_name]     = p.album_art_url
@@ -1956,7 +1869,6 @@ async def artist_deep_dive(request: Request, artist_name: str, db: AsyncSession 
         if p.was_skipped:
             track_skips[p.track_name] += 1
 
-    # Most played tracks
     most_played_tracks = []
     for track, count in track_plays.most_common(10):
         skip_count = track_skips.get(track, 0)
@@ -1969,7 +1881,6 @@ async def artist_deep_dive(request: Request, artist_name: str, db: AsyncSession 
             "album":     track_album.get(track),
         })
 
-    # Always completed (0 skips, 3+ plays)
     always_completed = [
         {"name": t, "plays": track_plays[t], "art": track_art.get(t)}
         for t in track_plays
@@ -1977,7 +1888,6 @@ async def artist_deep_dive(request: Request, artist_name: str, db: AsyncSession 
     ]
     always_completed = sorted(always_completed, key=lambda x: x["plays"], reverse=True)[:5]
 
-    # Most skipped tracks
     most_skipped_tracks = []
     for track, skip_count in track_skips.most_common(5):
         count = track_plays[track]
@@ -1989,12 +1899,149 @@ async def artist_deep_dive(request: Request, artist_name: str, db: AsyncSession 
             "art":       track_art.get(track),
         })
 
-    # Co-listened artists — what artists appear around the same time
-    from datetime import timedelta
+    # ── Most skipped track ────────────────────────────────────────────────
+    most_skipped_track = track_skips.most_common(1)[0] if track_skips else None
+
+    # ── First and last play ───────────────────────────────────────────────
+    first_play = plays[0]
+    last_play  = plays[-1]
+
+    # ── Days since first play ─────────────────────────────────────────────
+    days_since_first = (datetime.now(TIMEZONE).date() - first_play.listened_at.date()).days
+
+    # ── Active days ───────────────────────────────────────────────────────
+    active_days = len(days_with_plays)
+
+    # ── Consistency ───────────────────────────────────────────────────────
+    consistency = min(100.0, round(active_days / max(days_since_first, 1) * 100, 1)) if days_since_first > 0 else 100
+
+    # ── Plays per active day ──────────────────────────────────────────────
+    plays_per_day = round(total / active_days, 2) if active_days else 0
+
+    # ── Average plays per week ────────────────────────────────────────────
+    weeks          = max(days_since_first / 7, 1)
+    plays_per_week = round(total / weeks, 1)
+
+    # ── Binge days (5+ plays in one day) ──────────────────────────────────
+    day_plays  = Counter(p.listened_at.strftime("%Y-%m-%d") for p in plays)
+    binge_days = sum(1 for c in day_plays.values() if c >= 5)
+
+    # ── Busiest day ───────────────────────────────────────────────────────
+    busiest_day       = day_plays.most_common(1)[0] if day_plays else None
+    busiest_day_val   = busiest_day[0] if busiest_day else None
+    busiest_day_count = busiest_day[1] if busiest_day else 0
+
+    # ── Albums ────────────────────────────────────────────────────────────
+    album_counter = Counter(p.album for p in plays if p.album)
+    top_album     = album_counter.most_common(1)[0] if album_counter else None
+    unique_albums = len(album_counter)
+
+    # ── Average progress ──────────────────────────────────────────────────
+    avg_progress = round(sum(p.progress_pct or 0 for p in plays) / total, 1) if total else 0
+
+    # ── Average skip point ────────────────────────────────────────────────
+    skip_plays     = [p for p in plays if p.was_skipped]
+    avg_skip_point = round(sum(p.progress_pct or 0 for p in skip_plays) / len(skip_plays), 1) if skip_plays else None
+
+    # ── Night owl / morning / weekend ─────────────────────────────────────
+    night_pct   = round(sum(1 for p in plays if p.hour_of_day is not None and 0 <= p.hour_of_day < 4) / total * 100, 1) if total else 0
+    morning_pct = round(sum(1 for p in plays if p.hour_of_day is not None and 5 <= p.hour_of_day < 10) / total * 100, 1) if total else 0
+    weekend_pct = round(sum(1 for p in plays if p.day_of_week in ["Saturday", "Sunday"]) / total * 100, 1) if total else 0
+
+    # ── Comebacks (listened after 7+ day gap) ─────────────────────────────
+    comebacks = 0
+    for i in range(1, len(days_with_plays)):
+        if (days_with_plays[i] - days_with_plays[i-1]).days >= 7:
+            comebacks += 1
+
+    # ── Loyalty score ─────────────────────────────────────────────────────
+    loyalty = round(
+        (comp_rate * 0.4) +
+        (min(total, 100) / 100 * 30) +
+        (min(max_streak, 30) / 30 * 20) +
+        (min(active_days, 50) / 50 * 10),
+        1
+    )
+
+    # ── Time of day breakdown ─────────────────────────────────────────────
+    time_buckets = {
+        "morning":   sum(1 for p in plays if p.hour_of_day is not None and 5  <= p.hour_of_day < 12),
+        "afternoon": sum(1 for p in plays if p.hour_of_day is not None and 12 <= p.hour_of_day < 17),
+        "evening":   sum(1 for p in plays if p.hour_of_day is not None and 17 <= p.hour_of_day < 21),
+        "night":     sum(1 for p in plays if p.hour_of_day is not None and (21 <= p.hour_of_day or p.hour_of_day < 5)),
+    }
+
+    # ── Longest gap ───────────────────────────────────────────────────────
+    longest_gap = 0
+    for i in range(1, len(days_with_plays)):
+        gap         = (days_with_plays[i] - days_with_plays[i-1]).days
+        longest_gap = max(longest_gap, gap)
+
+    # ── Most played month ─────────────────────────────────────────────────
+    monthly              = Counter(p.listened_at.strftime("%Y-%m") for p in plays)
+    sorted_months        = sorted(monthly.keys())
+    monthly_labels       = sorted_months
+    monthly_values       = [monthly[m] for m in sorted_months]
+    most_played_month    = monthly.most_common(1)[0] if monthly else None
+
+    # ── Monthly skip rates ────────────────────────────────────────────────
+    monthly_skip_rates = []
+    for month in sorted_months:
+        month_plays = [p for p in plays if p.listened_at.strftime("%Y-%m") == month]
+        month_skips = sum(1 for p in month_plays if p.was_skipped)
+        rate        = round(month_skips / len(month_plays) * 100, 1) if month_plays else 0
+        monthly_skip_rates.append(rate)
+
+    # ── Skip streaks ──────────────────────────────────────────────────────
+    skip_streak = max_skip_streak = 0
+    for p in plays:
+        if p.was_skipped:
+            skip_streak += 1
+            max_skip_streak = max(max_skip_streak, skip_streak)
+        else:
+            skip_streak = 0
+
+    # ── Complete streaks ──────────────────────────────────────────────────
+    comp_streak = max_comp_streak = 0
+    for p in plays:
+        if not p.was_skipped:
+            comp_streak += 1
+            max_comp_streak = max(max_comp_streak, comp_streak)
+        else:
+            comp_streak = 0
+
+    # ── Rediscoveries ─────────────────────────────────────────────────────
+    rediscoveries = 0
+    if len(sorted_months) > 1:
+        for i in range(1, len(sorted_months)):
+            prev      = sorted_months[i-1]
+            curr      = sorted_months[i]
+            py, pm    = int(prev[:4]), int(prev[5:])
+            cy, cm    = int(curr[:4]), int(curr[5:])
+            month_gap = (cy - py) * 12 + (cm - pm)
+            if month_gap > 1:
+                rediscoveries += 1
+
+    # ── Album art ─────────────────────────────────────────────────────────
+    album_art = next((p.album_art_url for p in reversed(plays) if p.album_art_url), None)
+
+    # ── Artist image from cache ───────────────────────────────────────────
+    artist_image = None
+    cache_q = select(ArtistCache).where(
+        ArtistCache.artist_name == artist_name,
+        ArtistCache.track_name  == None,
+        ArtistCache.image_url   != None,
+    ).limit(1)
+    cached = (await db.execute(cache_q)).scalar_one_or_none()
+    if cached:
+        artist_image = cached.image_url
+
+    # ── Top co-listened artists ───────────────────────────────────────────
+    from datetime import timedelta as td
     co_artists = Counter()
     for p in plays:
-        window_start = p.listened_at - timedelta(minutes=30)
-        window_end   = p.listened_at + timedelta(minutes=30)
+        window_start = p.listened_at - td(minutes=30)
+        window_end   = p.listened_at + td(minutes=30)
         nearby_q     = (
             select(TrackPlay.artists)
             .where(TrackPlay.listened_at >= window_start)
@@ -2011,57 +2058,72 @@ async def artist_deep_dive(request: Request, artist_name: str, db: AsyncSession 
 
     top_co_artists = [{"name": a, "count": c} for a, c in co_artists.most_common(8)]
 
-    # Monthly play trend
-    monthly_plays = Counter()
-    for p in plays:
-        key = p.listened_at.strftime("%Y-%m")
-        monthly_plays[key] += 1
-
-    # Sort months chronologically
-    sorted_months  = sorted(monthly_plays.keys())
-    monthly_labels = sorted_months
-    monthly_values = [monthly_plays[m] for m in sorted_months]
-
-    # Get artist image from cache
-    artist_image = None
-    cache_q = select(ArtistCache).where(
-        ArtistCache.artist_name == artist_name,
-        ArtistCache.track_name  == None,
-        ArtistCache.image_url   != None,
-    ).limit(1)
-    cached = (await db.execute(cache_q)).scalar_one_or_none()
-    if cached:
-        artist_image = cached.image_url
-
-    # Unique albums
-    unique_albums = len(set(p.album for p in plays if p.album))
+    # ── Unique albums count ───────────────────────────────────────────────
+    unique_albums_count = len(set(p.album for p in plays if p.album))
 
     return templates.TemplateResponse("artist_dive.html", {
-        "request":           request,
-        "artist_name":       artist_name,
-        "found":             True,
-        "total":             total,
-        "skips":             skips,
-        "skip_rate":         skip_rate,
-        "minutes":           minutes,
-        "completion":        completion,
-        "first_play":        first_play,
-        "latest_play":       latest_play,
-        "max_streak":        max_streak,
-        "peak_hour":         peak_hour,
-        "peak_dow":          peak_dow,
-        "dominant_mood":     dominant_mood,
-        "mood_breakdown":    mood_breakdown,
-        "top_genres":        top_genres,
-        "most_played_tracks": most_played_tracks,
-        "always_completed":  always_completed,
+        "request":             request,
+        "artist_name":         artist_name,
+        "found":               True,
+        "total":               total,
+        "skips":               skips,
+        "completes":           completes,
+        "skip_rate":           skip_rate,
+        "comp_rate":           comp_rate,
+        "minutes":             minutes,
+        "hours":               hours,
+        "max_streak":          max_streak,
+        "current_streak":      current_streak,
+        "peak_hour":           peak_hour,
+        "peak_hour_count":     peak_hour_count,
+        "peak_dow":            peak_dow,
+        "peak_dow_count":      peak_dow_count,
+        "dominant_mood":       dominant_mood,
+        "mood_variety":        mood_variety,
+        "mood_breakdown":      dict(mood_counter.most_common(8)),
+        "top_genres":          top_genres,
+        "genre_variety":       genre_variety,
+        "most_played_tracks":  most_played_tracks,
+        "always_completed":    always_completed,
         "most_skipped_tracks": most_skipped_tracks,
-        "top_co_artists":    top_co_artists,
-        "monthly_labels":    monthly_labels,
-        "monthly_values":    monthly_values,
-        "artist_image":      artist_image,
-        "unique_albums":     unique_albums,
+        "most_skipped_track":  most_skipped_track,
+        "top_co_artists":      top_co_artists,
+        "monthly_labels":      monthly_labels,
+        "monthly_values":      monthly_values,
+        "monthly_skip_rates":  monthly_skip_rates,
+        "hour_dist":           hour_dist,
+        "artist_image":        artist_image,
+        "unique_albums":       unique_albums_count,
+        "first_play":          first_play,
+        "last_play":           last_play,
+        "days_since_first":    days_since_first,
+        "active_days":         active_days,
+        "consistency":         consistency,
+        "plays_per_day":       plays_per_day,
+        "plays_per_week":      plays_per_week,
+        "binge_days":          binge_days,
+        "busiest_day":         busiest_day_val,
+        "busiest_day_count":   busiest_day_count,
+        "top_album":           top_album[0] if top_album else None,
+        "avg_progress":        avg_progress,
+        "avg_skip_point":      avg_skip_point,
+        "night_pct":           night_pct,
+        "morning_pct":         morning_pct,
+        "weekend_pct":         weekend_pct,
+        "comebacks":           comebacks,
+        "loyalty":             loyalty,
+        "time_buckets":        time_buckets,
+        "longest_gap":         longest_gap,
+        "most_played_month":   most_played_month[0] if most_played_month else None,
+        "most_played_month_count": most_played_month[1] if most_played_month else 0,
+        "max_skip_streak":     max_skip_streak,
+        "max_comp_streak":     max_comp_streak,
+        "rediscoveries":       rediscoveries,
     })
+
+
+
+
 
 @app.get("/artist-search", response_class=HTMLResponse)
 async def artist_search(request: Request, db: AsyncSession = Depends(get_db)):
@@ -2548,10 +2610,10 @@ async def compare_artists_result(request: Request, db: AsyncSession = Depends(ge
         # Build adjacency from shared tracks
         all_plays_q = (
             select(TrackPlay.track_name, TrackPlay.artists)
-            .where(TrackPlay.artists.like("%,%"))
+            .distinct(TrackPlay.track_id)
             .group_by(TrackPlay.track_id)
         )
-        all_plays   = (await db.execute(all_plays_q)).fetchall()
+        all_plays = (await db.execute(all_plays_q)).fetchall()
 
         from itertools import combinations
         adjacency = defaultdict(set)
@@ -2611,4 +2673,1061 @@ async def compare_artists_result(request: Request, db: AsyncSession = Depends(ge
         "stats2":           stats2,
         "graph_distance":   graph_distance,
         "connecting_songs": connecting_songs,
+    })
+
+@app.get("/sync-liked-songs")
+async def sync_liked_songs(db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return {"error": "not authenticated"}
+
+    all_tracks = []
+    offset     = 0
+    limit      = 50
+
+    while True:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"https://api.spotify.com/v1/me/tracks?limit={limit}&offset={offset}",
+                headers={"Authorization": f"Bearer {token_store['access_token']}"},
+            )
+        if resp.status_code != 200:
+            break
+
+        data  = resp.json()
+        items = data.get("items", [])
+        if not items:
+            break
+
+        for item in items:
+            track = item["track"]
+            if not track:
+                continue
+            all_tracks.append({
+                "track_id":      track["id"],
+                "track_name":    track["name"],
+                "artists":       ", ".join(a["name"] for a in track["artists"]),
+                "album":         track["album"]["name"],
+                "album_art_url": track["album"]["images"][0]["url"] if track["album"]["images"] else None,
+                "duration_ms":   track["duration_ms"],
+                "added_at":      item["added_at"],
+                "spotify_url":   track["external_urls"]["spotify"],
+            })
+
+        if len(items) < limit:
+            break
+        offset += limit
+
+    # Upsert all tracks
+    saved = 0
+    for t in all_tracks:
+        existing_q = select(LikedSong).where(LikedSong.track_id == t["track_id"])
+        existing   = (await db.execute(existing_q)).scalar_one_or_none()
+
+        from datetime import datetime as dt
+        added_at = None
+        try:
+            added_at = dt.fromisoformat(t["added_at"].replace("Z", "+00:00"))
+        except Exception:
+            pass
+
+        if existing:
+            existing.track_name    = t["track_name"]
+            existing.artists       = t["artists"]
+            existing.album         = t["album"]
+            existing.album_art_url = t["album_art_url"]
+            existing.duration_ms   = t["duration_ms"]
+            existing.added_at      = added_at
+            existing.spotify_url   = t["spotify_url"]
+        else:
+            db.add(LikedSong(
+                track_id      = t["track_id"],
+                track_name    = t["track_name"],
+                artists       = t["artists"],
+                album         = t["album"],
+                album_art_url = t["album_art_url"],
+                duration_ms   = t["duration_ms"],
+                added_at      = added_at,
+                spotify_url   = t["spotify_url"],
+            ))
+            saved += 1
+
+    await db.commit()
+    return {"synced": len(all_tracks), "new": saved}
+
+@app.get("/liked-songs", response_class=HTMLResponse)
+async def liked_songs(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    # Check if we have data
+    total_q = select(func.count()).select_from(LikedSong)
+    total   = await db.scalar(total_q) or 0
+
+    if total == 0:
+        return templates.TemplateResponse("liked_songs.html", {
+            "request": request,
+            "total":   0,
+            "synced":  False,
+        })
+
+    # Fetch all liked songs
+    all_q    = select(LikedSong).order_by(LikedSong.added_at.asc())
+    all_songs = (await db.execute(all_q)).scalars().fetchall()
+
+    # ── Basic counts ──────────────────────────────────────────────────────
+    total_songs   = len(all_songs)
+    total_minutes = round(sum((s.duration_ms or 0) for s in all_songs) / 60000, 1)
+    total_hours   = round(total_minutes / 60, 1)
+
+    # ── Artists ───────────────────────────────────────────────────────────
+    artist_counter = Counter()
+    for s in all_songs:
+        if s.artists:
+            for a in s.artists.split(","):
+                a = a.strip()
+                if a:
+                    artist_counter[a] += 1
+
+    total_artists   = len(artist_counter)
+    top_artists     = [{"name": a, "count": c} for a, c in artist_counter.most_common(15)]
+    solo_artists    = sum(1 for c in artist_counter.values() if c == 1)
+    repeat_artists  = total_artists - solo_artists
+
+    # ── Albums ────────────────────────────────────────────────────────────
+    album_counter  = Counter((s.album, s.artists.split(",")[0].strip() if s.artists else "") for s in all_songs)
+    total_albums   = len(album_counter)
+    top_albums     = [{"album": k[0], "artist": k[1], "count": v} for k, v in album_counter.most_common(10)]
+
+    # ── Genres ────────────────────────────────────────────────────────────
+    genre_counter = Counter()
+    for s in all_songs:
+        if s.primary_genre:
+            for g in s.primary_genre.split(","):
+                g = g.strip().lower()
+                if g:
+                    genre_counter[g] += 1
+
+    total_genres = len(genre_counter)
+    top_genres   = [{"genre": g, "count": c} for g, c in genre_counter.most_common(15)]
+
+    # ── Moods ─────────────────────────────────────────────────────────────
+    mood_counter  = Counter(s.auto_mood for s in all_songs if s.auto_mood and s.auto_mood != "UNKNOWN")
+    top_moods     = [{"mood": m, "count": c} for m, c in mood_counter.most_common(10)]
+    dominant_mood = mood_counter.most_common(1)[0][0] if mood_counter else "UNKNOWN"
+
+    # ── Added at patterns ─────────────────────────────────────────────────
+    songs_with_date = [s for s in all_songs if s.added_at]
+
+    hour_counter = Counter(s.added_at.hour for s in songs_with_date)
+    dow_counter  = Counter(s.added_at.strftime("%A") for s in songs_with_date)
+    month_counter = Counter(s.added_at.strftime("%Y-%m") for s in songs_with_date)
+
+    hour_dist    = [hour_counter.get(h, 0) for h in range(24)]
+    dow_order    = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+    dow_dist     = [dow_counter.get(d, 0) for d in dow_order]
+
+    sorted_months  = sorted(month_counter.keys())
+    monthly_labels = sorted_months
+    monthly_values = [month_counter[m] for m in sorted_months]
+
+    peak_add_hour = hour_counter.most_common(1)[0][0] if hour_counter else None
+    peak_add_dow  = dow_counter.most_common(1)[0][0] if dow_counter else None
+
+    # ── First and latest liked ────────────────────────────────────────────
+    first_liked  = songs_with_date[0]  if songs_with_date else None
+    latest_liked = songs_with_date[-1] if songs_with_date else None
+
+    # ── Library age ───────────────────────────────────────────────────────
+    if first_liked:
+        from datetime import timezone as tz
+        first_dt      = first_liked.added_at.replace(tzinfo=tz.utc) if first_liked.added_at.tzinfo is None else first_liked.added_at
+        library_age   = (datetime.now(TIMEZONE) - first_dt.astimezone(TIMEZONE)).days
+    else:
+        library_age   = 0
+
+    # ── Songs added per period ────────────────────────────────────────────
+    adds_per_month = round(total_songs / max(len(sorted_months), 1), 1)
+
+    # ── Longest adding streak (consecutive days) ──────────────────────────
+    add_days = sorted(set(s.added_at.date() for s in songs_with_date))
+    add_streak = max_add_streak = 1
+    for i in range(1, len(add_days)):
+        if (add_days[i] - add_days[i-1]).days == 1:
+            add_streak += 1
+            max_add_streak = max(max_add_streak, add_streak)
+        else:
+            add_streak = 1
+
+    # ── Cross-reference with play history ────────────────────────────────
+    liked_ids_q  = select(LikedSong.track_id)
+    liked_ids    = set(r.track_id for r in (await db.execute(liked_ids_q)).fetchall())
+
+    played_q     = select(TrackPlay.track_id).where(TrackPlay.track_id.in_(liked_ids))
+    played_ids   = set(r.track_id for r in (await db.execute(played_q)).fetchall())
+
+    never_played      = liked_ids - played_ids
+    played_liked      = liked_ids & played_ids
+    never_played_pct  = round(len(never_played) / total_songs * 100, 1) if total_songs else 0
+    played_liked_pct  = round(len(played_liked) / total_songs * 100, 1) if total_songs else 0
+
+    # ── Most skipped liked songs ──────────────────────────────────────────
+    skipped_liked_q = (
+        select(TrackPlay.track_id, TrackPlay.track_name, TrackPlay.artists,
+               TrackPlay.album_art_url,
+               func.count().label("plays"),
+               func.sum(case((TrackPlay.was_skipped == True, 1), else_=0)).label("skips"))
+        .where(TrackPlay.track_id.in_(liked_ids))
+        .group_by(TrackPlay.track_id)
+        .having(func.sum(case((TrackPlay.was_skipped == True, 1), else_=0)) > 0)
+        .order_by((func.sum(case((TrackPlay.was_skipped == True, 1), else_=0)) * 1.0 / func.count()).desc())
+        .limit(5)
+    )
+    skipped_liked = (await db.execute(skipped_liked_q)).fetchall()
+
+    # ── Recently added ────────────────────────────────────────────────────
+    recent_liked = sorted(songs_with_date, key=lambda s: s.added_at, reverse=True)[:20]
+
+    # ── Genre diversity score ─────────────────────────────────────────────
+    # Higher = more diverse taste
+    if total_genres > 0 and total_songs > 0:
+        genre_diversity = round(min(100, (total_genres / total_songs * 100) * 3), 1)
+    else:
+        genre_diversity = 0
+
+    # ── Average song duration ─────────────────────────────────────────────
+    durations     = [s.duration_ms for s in all_songs if s.duration_ms]
+    avg_duration  = round(sum(durations) / len(durations) / 1000, 1) if durations else 0
+    avg_duration_fmt = f"{int(avg_duration // 60)}:{int(avg_duration % 60):02d}" if avg_duration else "—"
+
+    return templates.TemplateResponse("liked_songs.html", {
+        "request":          request,
+        "synced":           True,
+        "total_songs":      total_songs,
+        "total_hours":      total_hours,
+        "total_minutes":    total_minutes,
+        "total_artists":    total_artists,
+        "total_albums":     total_albums,
+        "total_genres":     total_genres,
+        "top_artists":    top_artists,
+        "all_artists":    [{"name": a, "count": c} for a, c in artist_counter.most_common()],
+        "top_albums":       top_albums,
+        "top_genres":       top_genres,
+        "top_moods":        top_moods,
+        "dominant_mood":    dominant_mood,
+        "hour_dist":        hour_dist,
+        "dow_dist":         dow_dist,
+        "dow_order":        dow_order,
+        "monthly_labels":   monthly_labels,
+        "monthly_values":   monthly_values,
+        "peak_add_hour":    peak_add_hour,
+        "peak_add_dow":     peak_add_dow,
+        "first_liked":      first_liked,
+        "latest_liked":     latest_liked,
+        "library_age":      library_age,
+        "adds_per_month":   adds_per_month,
+        "max_add_streak":   max_add_streak,
+        "never_played":     len(never_played),
+        "never_played_pct": never_played_pct,
+        "played_liked":     len(played_liked),
+        "played_liked_pct": played_liked_pct,
+        "skipped_liked":    skipped_liked,
+        "recent_liked":     recent_liked,
+        "genre_diversity":  genre_diversity,
+        "avg_duration_fmt": avg_duration_fmt,
+        "solo_artists":     solo_artists,
+        "repeat_artists":   repeat_artists,
+        "mood_counter":     dict(mood_counter),
+    })
+
+
+@app.get("/liked-songs-graph", response_class=HTMLResponse)
+async def liked_songs_graph(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    from itertools import combinations
+    from datetime import timedelta as td2
+
+    all_q     = select(LikedSong).order_by(LikedSong.added_at.asc())
+    all_songs = (await db.execute(all_q)).scalars().fetchall()
+
+    if not all_songs:
+        return templates.TemplateResponse("artist_graph.html", {
+            "request":     request,
+            "graph_data":  '{"nodes": [], "links": []}',
+            "node_count":  0,
+            "link_count":  0,
+            "graph_title": "LIKED SONGS GRAPH",
+            "graph_sub":   "◈ NO DATA YET — SYNC YOUR LIBRARY FIRST ◈",
+        })
+
+    connections  = defaultdict(lambda: {"count": 0, "tracks": set()})
+    artist_count = Counter()
+
+    for song in all_songs:
+        if not song.artists:
+            continue
+        artists = [a.strip() for a in song.artists.split(",") if a.strip()]
+        for a in artists:
+            artist_count[a] += 1
+        if len(artists) > 1:
+            for a1, a2 in combinations(sorted(artists), 2):
+                key = (a1, a2)
+                connections[key]["count"]  += 1
+                connections[key]["tracks"].add(song.track_name)
+
+    # Only include artists that have connections OR appear on 3+ liked songs
+    # connected_artists_set = set()
+    # for (a1, a2) in connections:
+    #     connected_artists_set.add(a1)
+    #     connected_artists_set.add(a2)
+
+    # all_artists = {
+    #     a for a in artist_count
+    #     if a in connected_artists_set or artist_count[a] >= 3
+    # }
+
+    # Include all artists from liked songs
+    connected_artists_set = set()
+    for (a1, a2) in connections:
+        connected_artists_set.add(a1)
+        connected_artists_set.add(a2)
+
+    all_artists = set(artist_count.keys())
+
+    print(f"[LIKED GRAPH] Filtered from {len(artist_count)} to {len(all_artists)} artists")
+
+    if not all_artists:
+        return templates.TemplateResponse("artist_graph.html", {
+            "request":     request,
+            "graph_data":  '{"nodes": [], "links": []}',
+            "node_count":  0,
+            "link_count":  0,
+            "graph_title": "LIKED SONGS GRAPH",
+            "graph_sub":   "◈ NO CONNECTIONS FOUND ◈",
+        })
+
+    # Build ID map from ArtistSpotifyID table
+    artist_id_map = {}
+    id_table_q    = select(ArtistSpotifyID)
+    id_table_rows = (await db.execute(id_table_q)).fetchall()
+    for row in id_table_rows:
+        artist_id_map[row[0].artist_name] = row[0].spotify_id
+
+    artist_images = {}
+
+    async def fetch_artist_image(artist_name: str):
+        # Check cache first
+        async with AsyncSessionLocal() as cache_db:
+            cache_q = select(ArtistCache).where(
+                ArtistCache.artist_name == artist_name,
+                ArtistCache.track_name  == None,
+                ArtistCache.image_url   != None,
+                ArtistCache.fetched_at  >= datetime.now(TIMEZONE) - td2(days=7),
+            ).limit(1)
+            cached = (await cache_db.execute(cache_q)).scalar_one_or_none()
+            if cached and cached.image_url:
+                artist_images[artist_name] = cached.image_url
+                return
+
+        async def save_cache(name: str, image_url: str):
+            if not image_url:
+                return
+            async with AsyncSessionLocal() as cache_db:
+                existing_q = select(ArtistCache).where(
+                    ArtistCache.artist_name == name,
+                    ArtistCache.track_name  == None,
+                ).limit(1)
+                existing = (await cache_db.execute(existing_q)).scalar_one_or_none()
+                if existing:
+                    existing.image_url = image_url
+                    await cache_db.commit()
+                else:
+                    cache_db.add(ArtistCache(
+                        artist_name = name,
+                        track_name  = None,
+                        image_url   = image_url,
+                    ))
+                    await cache_db.commit()
+
+        try:
+            spotify_id = artist_id_map.get(artist_name)
+
+            if spotify_id:
+                # Direct ID lookup — fastest and most accurate
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get(
+                        f"https://api.spotify.com/v1/artists/{spotify_id}",
+                        headers={"Authorization": f"Bearer {token_store['access_token']}"},
+                    )
+                if resp.status_code == 200:
+                    images    = resp.json().get("images", [])
+                    image_url = images[-1]["url"] if images else None
+                    artist_images[artist_name] = image_url
+                    await save_cache(artist_name, image_url)
+                    return
+                elif resp.status_code == 429:
+                    artist_images[artist_name] = None
+                    return
+
+            # Fall back to search — exact name match only
+            encoded = urllib.parse.quote(artist_name)
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    f"https://api.spotify.com/v1/search?q={encoded}&type=artist&limit=5",
+                    headers={"Authorization": f"Bearer {token_store['access_token']}"},
+                )
+
+            if resp.status_code == 429:
+                artist_images[artist_name] = None
+                return
+
+            if resp.status_code == 200:
+                items        = resp.json().get("artists", {}).get("items", [])
+                artist_lower = artist_name.lower().strip()
+                matched      = None
+
+                for item in items:
+                    if item["name"].lower().strip() == artist_lower:
+                        matched = item
+                        break
+
+                if matched:
+                    images    = matched.get("images", [])
+                    image_url = images[-1]["url"] if images else None
+                    artist_images[artist_name] = image_url
+                    await save_cache(artist_name, image_url)
+
+                    # Store Spotify ID for future use
+                    try:
+                        async with AsyncSessionLocal() as id_db:
+                            existing_q = select(ArtistSpotifyID).where(
+                                ArtistSpotifyID.artist_name == artist_name
+                            )
+                            existing = (await id_db.execute(existing_q)).scalar_one_or_none()
+                            if not existing:
+                                id_db.add(ArtistSpotifyID(
+                                    artist_name = artist_name,
+                                    spotify_id  = matched["id"],
+                                ))
+                                await id_db.commit()
+                    except Exception:
+                        pass
+                else:
+                    artist_images[artist_name] = None
+
+        except Exception:
+            artist_images[artist_name] = None
+
+    # Process in batches — known IDs first since they're faster
+    known_id_artists   = [a for a in all_artists if a in artist_id_map]
+    unknown_id_artists = [a for a in all_artists if a not in artist_id_map]
+    artist_list        = known_id_artists + unknown_id_artists
+
+    batch_size = 5
+    for i in range(0, len(artist_list), batch_size):
+        batch          = artist_list[i:i + batch_size]
+        is_known_batch = all(a in artist_id_map for a in batch)
+        await asyncio.gather(*[fetch_artist_image(a) for a in batch])
+        await asyncio.sleep(0.1 if is_known_batch else 0.3)
+
+    # Build nodes — only for filtered artists
+    nodes = []
+    for artist in all_artists:
+        nodes.append({
+            "id":        artist,
+            "image":     artist_images.get(artist),
+            "plays":     artist_count.get(artist, 1),
+            "connected": artist in connected_artists_set,
+        })
+
+    # Build links — only for connections between included artists
+    links = []
+    for (a1, a2), data in connections.items():
+        if a1 not in all_artists or a2 not in all_artists:
+            continue
+        seen          = set()
+        unique_tracks = []
+        for track in data["tracks"]:
+            if track.lower().strip() not in seen:
+                seen.add(track.lower().strip())
+                unique_tracks.append(track)
+        links.append({
+            "source": a1,
+            "target": a2,
+            "count":  len(unique_tracks),
+            "tracks": unique_tracks,
+        })
+
+    import json
+    graph_data = json.dumps({"nodes": nodes, "links": links})
+
+    return templates.TemplateResponse("artist_graph.html", {
+        "request":     request,
+        "graph_data":  graph_data,
+        "node_count":  len(nodes),
+        "link_count":  len(links),
+        "graph_title": "LIKED SONGS GRAPH",
+        "graph_sub":   f"◈ {len(nodes)} ARTISTS · {len(links)} CONNECTIONS ◈",
+    })
+
+@app.get("/liked-separation")
+async def liked_separation(a1: str, a2: str, db: AsyncSession = Depends(get_db)):
+    from itertools import combinations
+    from collections import deque
+
+    all_q     = select(LikedSong).where(LikedSong.artists != None)
+    all_songs = (await db.execute(all_q)).scalars().fetchall()
+
+    adjacency  = defaultdict(set)
+    edge_songs = defaultdict(set)
+
+    for song in all_songs:
+        artists = [a.strip() for a in song.artists.split(",") if a.strip()]
+        if len(artists) > 1:
+            for x, y in combinations(sorted(artists), 2):
+                adjacency[x].add(y)
+                adjacency[y].add(x)
+                edge_songs[(x, y)].add(song.track_name)
+                edge_songs[(y, x)].add(song.track_name)
+
+    if a1 not in adjacency and a2 not in adjacency:
+        return {"found": False, "reason": "neither artist has collaborations in your liked songs"}
+
+    if a2 in adjacency.get(a1, set()):
+        key   = tuple(sorted([a1, a2]))
+        songs = list(edge_songs.get(key, edge_songs.get((a1, a2), set())))
+        return {
+            "found":    True,
+            "degrees":  1,
+            "path":     [a1, a2],
+            "chain":    [{"from": a1, "to": a2, "songs": songs[:5]}],
+        }
+
+    queue   = deque([(a1, [a1])])
+    visited = {a1}
+
+    while queue:
+        current, path = queue.popleft()
+        if len(path) > 7:
+            break
+        for neighbor in adjacency.get(current, set()):
+            if neighbor == a2:
+                full_path = path + [a2]
+                chain     = []
+                for i in range(len(full_path) - 1):
+                    x, y = full_path[i], full_path[i + 1]
+                    key  = tuple(sorted([x, y]))
+                    chain.append({
+                        "from":  x,
+                        "to":    y,
+                        "songs": list(edge_songs.get(key, edge_songs.get((x, y), set())))[:3],
+                    })
+                return {
+                    "found":   True,
+                    "degrees": len(full_path) - 1,
+                    "path":    full_path,
+                    "chain":   chain,
+                }
+            if neighbor not in visited:
+                visited.add(neighbor)
+                queue.append((neighbor, path + [neighbor]))
+
+    return {"found": False, "reason": "no connection found within 6 degrees"}
+
+@app.get("/top-items", response_class=HTMLResponse)
+async def top_items(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    async def fetch_top(item_type: str, time_range: str):
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"https://api.spotify.com/v1/me/top/{item_type}?time_range={time_range}&limit=20",
+                headers={"Authorization": f"Bearer {token_store['access_token']}"},
+            )
+            if resp.status_code == 401:
+                await refresh_access_token()
+                return []
+            if resp.status_code != 200:
+                return []
+            return resp.json().get("items", [])
+
+    # Fetch all 6 combinations concurrently
+    (
+        artists_short, artists_medium, artists_long,
+        tracks_short,  tracks_medium,  tracks_long,
+    ) = await asyncio.gather(
+        fetch_top("artists", "short_term"),
+        fetch_top("artists", "medium_term"),
+        fetch_top("artists", "long_term"),
+        fetch_top("tracks",  "short_term"),
+        fetch_top("tracks",  "medium_term"),
+        fetch_top("tracks",  "long_term"),
+    )
+
+    # Build your own play count rankings for cross-reference
+    all_plays_q   = select(TrackPlay.artists)
+    all_play_rows = (await db.execute(all_plays_q)).fetchall()
+    own_artist_counter = Counter()
+    for row in all_play_rows:
+        if row.artists:
+            for a in row.artists.split(","):
+                a = a.strip()
+                if a:
+                    own_artist_counter[a] += 1
+
+    own_track_q   = select(TrackPlay.track_name, TrackPlay.artists, func.count().label("plays")).group_by(TrackPlay.track_id).order_by(func.count().desc())
+    own_track_rows = (await db.execute(own_track_q)).fetchall()
+    own_track_rank = {row.track_name.lower().strip(): i + 1 for i, row in enumerate(own_track_rows)}
+    own_artist_rank = {name.lower().strip(): i + 1 for i, (name, _) in enumerate(own_artist_counter.most_common())}
+
+    def format_artists(raw: list) -> list:
+        out = []
+        for i, item in enumerate(raw):
+            name  = item["name"]
+            image = item["images"][-1]["url"] if item.get("images") else None
+            out.append({
+                "rank":       i + 1,
+                "name":       name,
+                "image":      image,
+                "genres":     ", ".join(item.get("genres", [])[:3]),
+                "spotify_url": item["external_urls"]["spotify"],
+                "own_rank":   own_artist_rank.get(name.lower().strip()),
+                "own_plays":  own_artist_counter.get(name, 0),
+            })
+        return out
+
+    def format_tracks(raw: list) -> list:
+        out = []
+        for i, item in enumerate(raw):
+            name    = item["name"]
+            artists = ", ".join(a["name"] for a in item["artists"])
+            image   = item["album"]["images"][-1]["url"] if item["album"].get("images") else None
+            out.append({
+                "rank":        i + 1,
+                "name":        name,
+                "artists":     artists,
+                "album":       item["album"]["name"],
+                "image":       image,
+                "spotify_url": item["external_urls"]["spotify"],
+                "own_rank":    own_track_rank.get(name.lower().strip()),
+            })
+        return out
+
+    return templates.TemplateResponse("top_items.html", {
+        "request": request,
+        "artists": {
+            "short":  format_artists(artists_short),
+            "medium": format_artists(artists_medium),
+            "long":   format_artists(artists_long),
+        },
+        "tracks": {
+            "short":  format_tracks(tracks_short),
+            "medium": format_tracks(tracks_medium),
+            "long":   format_tracks(tracks_long),
+        },
+    })
+
+@app.get("/following", response_class=HTMLResponse)
+async def following(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    # Paginate through all followed artists
+    followed = []
+    url       = "https://api.spotify.com/v1/me/following?type=artist&limit=50"
+
+    while url:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                url,
+                headers={"Authorization": f"Bearer {token_store['access_token']}"},
+            )
+        if resp.status_code == 401:
+            await refresh_access_token()
+            break
+        if resp.status_code != 200:
+            break
+
+        data    = resp.json().get("artists", {})
+        items   = data.get("items", [])
+        for item in items:
+            followed.append({
+                "name":        item["name"],
+                "spotify_id":  item["id"],
+                "image":       item["images"][-1]["url"] if item.get("images") else None,
+                "genres":      ", ".join(item.get("genres", [])[:3]),
+                "spotify_url": item["external_urls"]["spotify"],
+            })
+
+        # Spotify uses cursor-based pagination for following
+        cursor = data.get("cursors", {}).get("after")
+        url    = f"https://api.spotify.com/v1/me/following?type=artist&limit=50&after={cursor}" if cursor else None
+
+    if not followed:
+        return templates.TemplateResponse("following.html", {
+            "request":      request,
+            "followed":     [],
+            "loyal":        [],
+            "ghost":        [],
+            "unrecognized": [],
+            "total":        0,
+        })
+
+    # Build your own play counts for cross-reference
+    all_plays_q   = select(TrackPlay.artists)
+    all_play_rows = (await db.execute(all_plays_q)).fetchall()
+    own_counter   = Counter()
+    for row in all_play_rows:
+        if row.artists:
+            for a in row.artists.split(","):
+                a = a.strip()
+                if a:
+                    own_counter[a] += 1
+
+    followed_names = {f["name"].lower().strip() for f in followed}
+
+    # Cross-reference
+    for f in followed:
+        key         = f["name"].lower().strip()
+        f["plays"]  = own_counter.get(f["name"], 0)
+        # fuzzy match — try case-insensitive
+        if f["plays"] == 0:
+            for tracked_name, count in own_counter.items():
+                if tracked_name.lower().strip() == key:
+                    f["plays"] = count
+                    break
+
+    # Build the three groups
+    loyal        = sorted([f for f in followed if f["plays"] >= 10],  key=lambda x: x["plays"], reverse=True)
+    ghost        = sorted([f for f in followed if f["plays"] == 0],   key=lambda x: x["name"])
+    casual       = sorted([f for f in followed if 0 < f["plays"] < 10], key=lambda x: x["plays"], reverse=True)
+
+    # Unrecognized fans — play a lot but haven't followed
+    followed_lower = {f["name"].lower().strip() for f in followed}
+    unrecognized   = []
+    for name, count in own_counter.most_common(50):
+        if name.lower().strip() not in followed_lower and count >= 10:
+            # Get image from cache if available
+            cache_q = select(ArtistCache).where(
+                ArtistCache.artist_name == name,
+                ArtistCache.track_name  == None,
+                ArtistCache.image_url   != None,
+            ).limit(1)
+            cached    = (await db.execute(cache_q)).scalar_one_or_none()
+            image_url = cached.image_url if cached else None
+            unrecognized.append({
+                "name":   name,
+                "plays":  count,
+                "image":  image_url,
+            })
+
+    return templates.TemplateResponse("following.html", {
+        "request":      request,
+        "followed":     followed,
+        "loyal":        loyal,
+        "ghost":        ghost,
+        "casual":       casual,
+        "unrecognized": unrecognized,
+        "total":        len(followed),
+        "ghost_pct":    round(len(ghost) / len(followed) * 100, 1) if followed else 0,
+        "loyal_pct":    round(len(loyal) / len(followed) * 100, 1) if followed else 0,
+    })
+
+@app.get("/review", response_class=HTMLResponse)
+async def year_review(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    # Get all available years
+    years_q = (
+        select(func.strftime('%Y', TrackPlay.listened_at).label("year"))
+        .group_by(func.strftime('%Y', TrackPlay.listened_at))
+        .order_by(func.strftime('%Y', TrackPlay.listened_at).desc())
+    )
+    available_years = [r.year for r in (await db.execute(years_q)).fetchall()]
+
+    if not available_years:
+        return templates.TemplateResponse("year_review.html", {
+            "request":         request,
+            "available_years": [],
+            "selected_year":   None,
+            "data":            None,
+        })
+
+    return templates.TemplateResponse("year_review.html", {
+        "request":         request,
+        "available_years": available_years,
+        "selected_year":   None,
+        "data":            None,
+    })
+
+
+@app.get("/review/{year}", response_class=HTMLResponse)
+async def year_review_data(request: Request, year: str, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    # Get all available years for selector
+    years_q = (
+        select(func.strftime('%Y', TrackPlay.listened_at).label("year"))
+        .group_by(func.strftime('%Y', TrackPlay.listened_at))
+        .order_by(func.strftime('%Y', TrackPlay.listened_at).desc())
+    )
+    available_years = [r.year for r in (await db.execute(years_q)).fetchall()]
+
+    # Get all plays for this year
+    plays_q = (
+        select(TrackPlay)
+        .where(func.strftime('%Y', TrackPlay.listened_at) == year)
+        .order_by(TrackPlay.listened_at.asc())
+    )
+    plays = (await db.execute(plays_q)).scalars().fetchall()
+
+    if not plays:
+        return templates.TemplateResponse("year_review.html", {
+            "request":         request,
+            "available_years": available_years,
+            "selected_year":   year,
+            "data":            None,
+        })
+
+    total     = len(plays)
+    skips     = sum(1 for p in plays if p.was_skipped)
+    completes = total - skips
+    skip_rate = round(skips / total * 100, 1) if total else 0
+    minutes   = round(sum(p.progress_ms for p in plays) / 60000, 1)
+    hours     = round(minutes / 60, 1)
+    days      = len(set(p.listened_at.date() for p in plays))
+
+    # ── Top artists ───────────────────────────────────────────────────────
+    artist_counter = Counter()
+    for p in plays:
+        if p.artists:
+            for a in p.artists.split(","):
+                a = a.strip()
+                if a:
+                    artist_counter[a] += 1
+
+    top_artists = [{"name": a, "plays": c} for a, c in artist_counter.most_common(5)]
+
+    # Get artist images from cache
+    for a in top_artists:
+        cache_q = select(ArtistCache).where(
+            ArtistCache.artist_name == a["name"],
+            ArtistCache.track_name  == None,
+            ArtistCache.image_url   != None,
+        ).limit(1)
+        cached = (await db.execute(cache_q)).scalar_one_or_none()
+        a["image"] = cached.image_url if cached else None
+
+    # ── Top tracks ────────────────────────────────────────────────────────
+    track_counter = Counter()
+    track_art     = {}
+    track_artists = {}
+    for p in plays:
+        track_counter[p.track_name] += 1
+        track_art[p.track_name]      = p.album_art_url
+        track_artists[p.track_name]  = p.artists
+
+    top_tracks = [
+        {
+            "name":    t,
+            "plays":   c,
+            "art":     track_art.get(t),
+            "artists": track_artists.get(t, ""),
+        }
+        for t, c in track_counter.most_common(5)
+    ]
+
+    # ── Top genre ─────────────────────────────────────────────────────────
+    genre_counter = Counter()
+    for p in plays:
+        if p.primary_genre:
+            for g in p.primary_genre.split(","):
+                g = g.strip().lower()
+                if g:
+                    genre_counter[g] += 1
+    top_genre  = genre_counter.most_common(1)[0][0] if genre_counter else "—"
+    top_genres = [{"genre": g, "count": c} for g, c in genre_counter.most_common(8)]
+
+    # ── Top mood ──────────────────────────────────────────────────────────
+    mood_counter  = Counter(p.auto_mood for p in plays if p.auto_mood and p.auto_mood != "UNKNOWN")
+    top_mood      = mood_counter.most_common(1)[0][0] if mood_counter else "UNKNOWN"
+    mood_breakdown = [{"mood": m, "count": c} for m, c in mood_counter.most_common(8)]
+
+    # ── First and last track ──────────────────────────────────────────────
+    first_track = plays[0]
+    last_track  = plays[-1]
+
+    # ── Biggest day ───────────────────────────────────────────────────────
+    day_counter   = Counter(p.listened_at.strftime("%Y-%m-%d") for p in plays)
+    biggest_day   = day_counter.most_common(1)[0] if day_counter else None
+
+    # ── Month by month ────────────────────────────────────────────────────
+    monthly = Counter(p.listened_at.strftime("%b") for p in plays)
+    month_order  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    monthly_data = [{"month": m, "plays": monthly.get(m, 0)} for m in month_order]
+    max_monthly  = max(d["plays"] for d in monthly_data) or 1
+
+    # ── New artists discovered this year ─────────────────────────────────
+    # First ever play for each artist across all time
+    all_plays_q = (
+        select(TrackPlay.artists, func.min(TrackPlay.listened_at).label("first"))
+        .group_by(TrackPlay.artists)
+    )
+    all_first_plays = (await db.execute(all_plays_q)).fetchall()
+    new_artists = set()
+    for row in all_first_plays:
+        if row.artists and row.first:
+            first_year = row.first.strftime("%Y")
+            if first_year == year:
+                for a in row.artists.split(","):
+                    a = a.strip()
+                    if a:
+                        new_artists.add(a)
+    new_artist_count = len(new_artists)
+    new_artists_list = [
+        {"name": a, "plays": artist_counter.get(a, 0)}
+        for a in sorted(new_artists, key=lambda x: artist_counter.get(x, 0), reverse=True)
+    ][:10]
+
+    # ── Songs played every month ──────────────────────────────────────────
+    months_active = set(p.listened_at.strftime("%b") for p in plays)
+    track_months  = defaultdict(set)
+    for p in plays:
+        track_months[p.track_name].add(p.listened_at.strftime("%b"))
+    every_month_tracks = [
+        {"name": t, "plays": track_counter[t], "art": track_art.get(t)}
+        for t, months in track_months.items()
+        if months >= months_active and len(months_active) >= 3
+    ]
+    every_month_tracks = sorted(every_month_tracks, key=lambda x: x["plays"], reverse=True)[:8]
+
+    # ── Ghost liked songs ─────────────────────────────────────────────────
+    liked_q = select(LikedSong)
+    liked   = (await db.execute(liked_q)).scalars().fetchall()
+    played_this_year = set(p.track_id for p in plays)
+    ghost_liked = [
+        s for s in liked
+        if s.track_id not in played_this_year
+    ][:10]
+
+    # ── No-skip streak within the year ───────────────────────────────────
+    longest_noskip = temp_noskip = 0
+    for p in plays:
+        if not p.was_skipped:
+            temp_noskip    += 1
+            longest_noskip  = max(longest_noskip, temp_noskip)
+        else:
+            temp_noskip = 0
+
+    # ── Peak hour ─────────────────────────────────────────────────────────
+    hour_counter = Counter(p.hour_of_day for p in plays if p.hour_of_day is not None)
+    peak_hour    = hour_counter.most_common(1)[0][0] if hour_counter else None
+    hour_dist    = [hour_counter.get(h, 0) for h in range(24)]
+
+    # ── Peak day ──────────────────────────────────────────────────────────
+    dow_counter = Counter(p.day_of_week for p in plays if p.day_of_week)
+    peak_dow    = dow_counter.most_common(1)[0][0] if dow_counter else None
+
+    # ── Night owl vs morning ──────────────────────────────────────────────
+    night_pct   = round(sum(1 for p in plays if p.hour_of_day is not None and 0  <= p.hour_of_day < 4) / total * 100, 1) if total else 0
+    morning_pct = round(sum(1 for p in plays if p.hour_of_day is not None and 5  <= p.hour_of_day < 10) / total * 100, 1) if total else 0
+    weekend_pct = round(sum(1 for p in plays if p.day_of_week in ["Saturday", "Sunday"]) / total * 100, 1) if total else 0
+
+    # ── Skip rate vs prior year ───────────────────────────────────────────
+    prior_year     = str(int(year) - 1)
+    prior_plays_q  = (
+        select(TrackPlay.was_skipped)
+        .where(func.strftime('%Y', TrackPlay.listened_at) == prior_year)
+    )
+    prior_plays    = (await db.execute(prior_plays_q)).fetchall()
+    prior_skips    = sum(1 for p in prior_plays if p.was_skipped)
+    prior_skip_rate = round(prior_skips / len(prior_plays) * 100, 1) if prior_plays else None
+    skip_rate_delta = round(skip_rate - prior_skip_rate, 1) if prior_skip_rate is not None else None
+
+    # ── Liked songs added this year ───────────────────────────────────────
+    new_liked = [s for s in liked if s.added_at and s.added_at.strftime("%Y") == year]
+    new_liked_count = len(new_liked)
+
+    # ── Most skipped track ────────────────────────────────────────────────
+    skip_counter = Counter(p.track_name for p in plays if p.was_skipped)
+    most_skipped = skip_counter.most_common(1)[0] if skip_counter else None
+
+    # ── Unique counts ─────────────────────────────────────────────────────
+    unique_tracks  = len(set(p.track_id  for p in plays))
+    unique_artists = len(set(
+        a.strip()
+        for p in plays if p.artists
+        for a in p.artists.split(",")
+        if a.strip()
+    ))
+
+    # ── Listening personality ─────────────────────────────────────────────
+    if night_pct > morning_pct and night_pct > 20:
+        personality = "🌙 NIGHT OWL"
+    elif morning_pct > night_pct and morning_pct > 20:
+        personality = "🌅 EARLY BIRD"
+    elif weekend_pct > 40:
+        personality = "📅 WEEKEND WARRIOR"
+    else:
+        personality = "⚡ ALL DAY LISTENER"
+
+    # ── Biggest comeback (longest gap then returned) ───────────────────────
+    days_with_plays = sorted(set(p.listened_at.date() for p in plays))
+    longest_gap = 0
+    comeback_date = None
+    for i in range(1, len(days_with_plays)):
+        gap = (days_with_plays[i] - days_with_plays[i-1]).days
+        if gap > longest_gap:
+            longest_gap   = gap
+            comeback_date = days_with_plays[i].strftime("%b %d")
+
+    return templates.TemplateResponse("year_review.html", {
+        "request":          request,
+        "available_years":  available_years,
+        "selected_year":    year,
+        "data": {
+            "total":            total,
+            "skips":            skips,
+            "completes":        completes,
+            "skip_rate":        skip_rate,
+            "minutes":          minutes,
+            "hours":            hours,
+            "days":             days,
+            "top_artists":      top_artists,
+            "top_tracks":       top_tracks,
+            "top_genre":        top_genre,
+            "top_genres":       top_genres,
+            "top_mood":         top_mood,
+            "mood_breakdown":   mood_breakdown,
+            "first_track":      first_track,
+            "last_track":       last_track,
+            "biggest_day":      biggest_day,
+            "monthly_data":     monthly_data,
+            "max_monthly":      max_monthly,
+            "new_artist_count": new_artist_count,
+            "new_artists_list": new_artists_list,
+            "every_month_tracks": every_month_tracks,
+            "ghost_liked":      ghost_liked,
+            "longest_noskip":   longest_noskip,
+            "peak_hour":        peak_hour,
+            "peak_dow":         peak_dow,
+            "hour_dist":        hour_dist,
+            "night_pct":        night_pct,
+            "morning_pct":      morning_pct,
+            "weekend_pct":      weekend_pct,
+            "skip_rate_delta":  skip_rate_delta,
+            "prior_skip_rate":  prior_skip_rate,
+            "prior_year":       prior_year,
+            "new_liked_count":  new_liked_count,
+            "most_skipped":     most_skipped,
+            "unique_tracks":    unique_tracks,
+            "unique_artists":   unique_artists,
+            "personality":      personality,
+            "longest_gap":      longest_gap,
+            "comeback_date":    comeback_date,
+        },
     })

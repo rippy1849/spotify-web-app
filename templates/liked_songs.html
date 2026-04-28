@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LIKED SONGS // RAVE FM</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Share Tech Mono', monospace; min-height: 100vh; background: #000; color: #fff; padding: 40px 20px; }
+        .scanlines { pointer-events: none; position: fixed; inset: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 4px); z-index: 10; }
+        .bg { position: fixed; inset: 0; background: radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%), radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%), #000; animation: bgshift 6s ease-in-out infinite alternate; z-index: 0; }
+        @keyframes bgshift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(180deg); } }
+        .content { position: relative; z-index: 5; max-width: 1100px; margin: 0 auto; }
+        h1 { font-family: 'Orbitron', sans-serif; font-size: 2.5rem; font-weight: 900; background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff); background-size: 300% 100%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: rainbowShift 4s linear infinite; filter: drop-shadow(0 0 12px #ff00ff); letter-spacing: 4px; margin-bottom: 8px; }
+        @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+        .subtitle { color: #00ffff; text-shadow: 0 0 8px #00ffff; letter-spacing: 4px; font-size: 0.75rem; margin-bottom: 40px; }
+        .nav { display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+        .nav a { color: #ff00aa; text-decoration: none; font-size: 0.75rem; letter-spacing: 2px; text-shadow: 0 0 8px #ff00aa; }
+        .nav a:hover { color: #fff; }
+        h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 4px; color: #ffff00; text-shadow: 0 0 10px #ffff0088; margin-bottom: 16px; border-bottom: 1px solid #ffff0033; padding-bottom: 8px; }
+
+        /* ── Sync card ── */
+        .sync-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #ff00ff44;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .sync-card .sync-info { font-size: 0.72rem; color: #888; letter-spacing: 1px; }
+        .sync-card .sync-info span { color: #00ffff; }
+
+        .sync-btn {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            letter-spacing: 3px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 700;
+            color: #000;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ff00ff);
+            background-size: 200%;
+            animation: btnShift 1.5s linear infinite;
+            box-shadow: 0 0 16px #ff00ff;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        @keyframes btnShift { 0% { background-position: 0%; } 100% { background-position: 200%; } }
+
+        /* ── Stats grids ── */
+        .stats-grid   { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 40px; }
+        .stats-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 40px; }
+
+        .stat-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff44; border-radius: 10px; padding: 20px; text-align: center; }
+        .stat-card.gold-border { border-color: #ffff0066; box-shadow: 0 0 20px #ffff0022; }
+
+        .stat-value { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; font-weight: 900; color: #00ffff; text-shadow: 0 0 16px #00ffff; }
+        .stat-value.gold { color: #ffff00; text-shadow: 0 0 16px #ffff00; }
+        .stat-value.pink { color: #ff00aa; text-shadow: 0 0 16px #ff00aa44; }
+        .stat-value.green { color: #00ff88; text-shadow: 0 0 16px #00ff8844; }
+
+        .stat-label { font-size: 0.62rem; letter-spacing: 2px; color: #ff00aa; margin-top: 6px; }
+        .stat-sub   { font-size: 0.55rem; color: #555; letter-spacing: 1px; margin-top: 3px; }
+
+        /* ── Charts ── */
+        .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 40px; }
+        .chart-card  { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff22; border-radius: 10px; padding: 20px; height: 280px; }
+        .chart-card canvas { max-height: 240px; }
+
+        /* ── Two col ── */
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 40px; }
+
+        /* ── Section ── */
+        .section { margin-bottom: 40px; }
+
+        /* ── Lists ── */
+        .list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 9px 0;
+            border-bottom: 1px solid #ffffff08;
+            font-size: 0.78rem;
+            transition: background 0.15s;
+        }
+
+        .list-item:hover { background: #ffffff05; }
+        .list-item .li-name  { color: #fff; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 12px; }
+        .list-item .li-sub   { font-size: 0.65rem; color: #888; letter-spacing: 1px; }
+        .list-item .li-count { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; color: #00ffff; flex-shrink: 0; }
+        .list-item .li-bar   { width: 80px; height: 4px; background: #ffffff11; border-radius: 99px; overflow: hidden; flex-shrink: 0; margin: 0 12px; }
+        .list-item .li-fill  { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #ff00ff, #00ffff); }
+
+        /* ── Track items ── */
+        .track-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 9px 0;
+            border-bottom: 1px solid #ffffff08;
+        }
+
+        .track-item img { width: 40px; height: 40px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
+        .track-item .img-ph { width: 40px; height: 40px; border-radius: 4px; background: #ff00ff22; flex-shrink: 0; }
+        .track-item .ti-name   { font-size: 0.8rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .track-item .ti-artist { font-size: 0.65rem; color: #00ffff; letter-spacing: 1px; margin-top: 2px; }
+        .track-item .ti-meta   { font-size: 0.62rem; color: #888; margin-left: auto; flex-shrink: 0; text-align: right; }
+
+        /* ── Mood pills ── */
+        .mood-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 40px; }
+        .mood-card { background: rgba(255,255,255,0.03); border: 1px solid #ff00ff22; border-radius: 8px; padding: 14px; text-align: center; }
+        .mood-card .mc-mood  { font-size: 0.62rem; letter-spacing: 2px; color: #ff00ff; margin-bottom: 4px; }
+        .mood-card .mc-count { font-family: 'Orbitron', sans-serif; font-size: 1rem; color: #00ffff; }
+
+        /* ── Library insight cards ── */
+        .insight-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 40px; }
+
+        .insight-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--color, #ff00ff)33;
+            border-radius: 10px;
+            padding: 18px;
+            text-align: center;
+        }
+
+        .insight-card .ic-icon  { font-size: 1.8rem; margin-bottom: 8px; }
+        .insight-card .ic-val   { font-family: 'Orbitron', sans-serif; font-size: 1.3rem; font-weight: 900; color: var(--color, #ff00ff); text-shadow: 0 0 12px var(--color, #ff00ff)88; margin-bottom: 4px; }
+        .insight-card .ic-label { font-size: 0.6rem; letter-spacing: 2px; color: #888; margin-bottom: 4px; }
+        .insight-card .ic-desc  { font-size: 0.58rem; color: #555; letter-spacing: 0.5px; }
+
+        .empty { color: #555; font-size: 0.8rem; letter-spacing: 2px; text-align: center; padding: 60px 0; }
+
+        @media (max-width: 700px) {
+            .stats-grid   { grid-template-columns: repeat(2, 1fr); }
+            .stats-grid-3 { grid-template-columns: repeat(2, 1fr); }
+            .charts-grid  { grid-template-columns: 1fr; }
+            .two-col      { grid-template-columns: 1fr; }
+            .insight-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+/* ── Separation tool ── */
+.sep-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid #ffff0033;
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 40px;
+    text-align: center;
+    box-shadow: 0 0 30px #ffff0011;
+}
+.sep-card h2 { text-align: left; }
+.sep-card > p { text-align: left; }
+.sep-inputs {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+    text-align: left;
+}
+.sep-vs {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 900;
+    color: #ffff00;
+    text-shadow: 0 0 20px #ffff00;
+    text-align: center;
+    letter-spacing: 4px;
+    padding-bottom: 0;
+}
+.sep-input-wrap { position: relative; }
+.sep-input-wrap input {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid #ffff0033;
+    border-radius: 4px;
+    padding: 10px 14px;
+    color: #fff;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.82rem;
+    letter-spacing: 1px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.sep-input-wrap input:focus { border-color: #ffff00; box-shadow: 0 0 16px #ffff0044; }
+.sep-input-wrap input::placeholder { color: #555; }
+.sep-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0; right: 0;
+    background: rgba(0,0,0,0.95);
+    border: 1px solid #ffff0033;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    z-index: 50;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+    box-shadow: 0 8px 24px #ffff0011;
+}
+.sep-dropdown-item {
+    padding: 9px 14px;
+    font-size: 0.78rem;
+    letter-spacing: 1px;
+    color: #ccc;
+    cursor: pointer;
+    border-bottom: 1px solid #ffffff08;
+    transition: background 0.1s;
+}
+.sep-dropdown-item:hover { background: #ffff0022; color: #ffff00; }
+.sep-btn {
+    display: block;
+    width: 100%;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.8rem;
+    letter-spacing: 3px;
+    padding: 14px;
+    border: none;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #ffff00, #ff00ff, #00ffff, #ffff00);
+    background-size: 200%;
+    animation: btnShift 1.5s linear infinite;
+    box-shadow: 0 0 20px #ffff0066;
+    color: #000;
+    font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 20px;
+}
+@keyframes btnShift { 0% { background-position: 0%; } 100% { background-position: 200%; } }
+.sep-result { display: none; }
+.sep-degree {
+    text-align: center;
+    margin-bottom: 20px;
+}
+.sep-degree .deg-num {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 4rem;
+    font-weight: 900;
+    color: #ffff00;
+    text-shadow: 0 0 30px #ffff00;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+.sep-degree .deg-label {
+    font-size: 0.7rem;
+    letter-spacing: 4px;
+    color: #ffff0088;
+    margin-top: 6px;
+}
+.sep-chain {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+.sep-step {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.sep-step .ss-from,
+.sep-step .ss-to {
+    background: rgba(255,255,0,0.1);
+    border: 1px solid #ffff0033;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 0.72rem;
+    color: #ffff00;
+    letter-spacing: 1px;
+}
+.sep-step .ss-arrow {
+    color: #ffff0066;
+    font-size: 0.8rem;
+}
+.sep-step .ss-via {
+    font-size: 0.62rem;
+    color: #555;
+    margin-left: 8px;
+    letter-spacing: 1px;
+}
+.sep-songs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 12px;
+}
+.sep-song-pill {
+    background: rgba(255,255,0,0.08);
+    border: 1px solid #ffff0022;
+    border-radius: 99px;
+    padding: 4px 12px;
+    font-size: 0.65rem;
+    color: #ffff0088;
+    letter-spacing: 1px;
+}
+.sep-path-label {
+    font-size: 0.7rem;
+    color: #888;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+}
+.sep-not-found {
+    text-align: center;
+    padding: 24px;
+    font-size: 0.75rem;
+    color: #555;
+    letter-spacing: 2px;
+    display: none;
+}
+@media (max-width: 700px) {
+    .sep-inputs { grid-template-columns: 1fr; }
+}
+
+/* ── Liked Graph Card ── */
+.liked-graph-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid #ff660033;
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 40px;
+    text-decoration: none;
+    overflow: hidden;
+    transition: all 0.3s;
+    box-shadow: 0 0 30px #ff660011;
+    cursor: pointer;
+    min-height: 120px;
+}
+.liked-graph-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #ff6600, #ffaa00, #ff6600, transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.liked-graph-card:hover {
+    border-color: #ff660088;
+    background: rgba(255,102,0,0.06);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 40px #ff660033, 0 0 0 1px #ff660033;
+}
+.liked-graph-card:hover::after { opacity: 1; }
+.lgc-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: 12px;
+    overflow: hidden;
+}
+.lgc-bg canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+.lgc-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.5) 100%);
+}
+.lgc-icon {
+    font-size: 3rem;
+    position: relative;
+    z-index: 2;
+    filter: drop-shadow(0 0 12px #ff6600);
+    flex-shrink: 0;
+    transition: transform 0.3s;
+}
+.liked-graph-card:hover .lgc-icon { transform: scale(1.15) rotate(-5deg); }
+.lgc-content {
+    flex: 1;
+    position: relative;
+    z-index: 2;
+    min-width: 0;
+}
+.lgc-category {
+    font-size: 0.58rem;
+    letter-spacing: 4px;
+    color: #ff6600;
+    text-shadow: 0 0 8px #ff660088;
+    margin-bottom: 6px;
+}
+.lgc-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: #fff;
+    margin-bottom: 8px;
+    text-shadow: 0 0 20px #ff660044;
+}
+.lgc-desc {
+    font-size: 0.68rem;
+    color: #888;
+    letter-spacing: 1px;
+    line-height: 1.6;
+    max-width: 500px;
+}
+.lgc-stats {
+    display: flex;
+    gap: 24px;
+    position: relative;
+    z-index: 2;
+    flex-shrink: 0;
+    border-left: 1px solid #ff660033;
+    padding-left: 24px;
+}
+.lgc-stat { text-align: center; }
+.lgc-stat-val {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: #ff6600;
+    text-shadow: 0 0 16px #ff660088;
+    line-height: 1;
+}
+.lgc-stat-label {
+    font-size: 0.55rem;
+    letter-spacing: 2px;
+    color: #ff660088;
+    margin-top: 4px;
+}
+@media (max-width: 700px) {
+    .liked-graph-card { flex-direction: column; text-align: center; }
+    .lgc-stats { border-left: none; border-top: 1px solid #ff660033; padding-left: 0; padding-top: 16px; justify-content: center; }
+    .lgc-overlay { background: rgba(0,0,0,0.88); }
+}
+    </style>
+</head>
+<body>
+
+    <script>
+async function syncLibrary() {
+    const btn = document.getElementById('syncBtn');
+    btn.textContent      = '⟳ SYNCING...';
+    btn.style.pointerEvents = 'none';
+    btn.style.opacity    = '0.7';
+
+    try {
+        const resp = await fetch('/sync-liked-songs');
+        const data = await resp.json();
+
+        btn.textContent = `✓ SYNCED ${data.synced} SONGS`;
+        btn.style.background = 'linear-gradient(90deg, #00ff88, #00ffff)';
+
+        // Brief pause so the user sees the confirmation, then reload
+        setTimeout(() => window.location.reload(), 1200);
+
+    } catch (err) {
+        btn.textContent      = '✗ SYNC FAILED — RETRY';
+        btn.style.pointerEvents = 'auto';
+        btn.style.opacity    = '1';
+        btn.style.background = 'linear-gradient(90deg, #ff0000, #ff00aa)';
+    }
+}
+</script>
+    <div class="bg"></div>
+    <div class="scanlines"></div>
+    <div class="content">
+        <div class="nav">
+            <a href="/">⌂ HOME</a>
+            <a href="/now-playing">▶ NOW PLAYING</a>
+            <a href="/stats">◈ STATS</a>
+            <a href="/liked-songs-graph">🕸 LIKED GRAPH</a>
+            <a href="/logout">⏏ LOGOUT</a>
+        </div>
+
+        <h1>LIKED SONGS</h1>
+        <p class="subtitle">◈ YOUR MUSIC LIBRARY ◈</p>
+
+        <!-- Sync card -->
+        <div class="sync-card">
+            <div class="sync-info">
+                {% if synced %}
+                    <span>{{ total_songs }}</span> songs in library ·
+                    <span>{{ total_artists }}</span> artists ·
+                    <span>{{ total_albums }}</span> albums
+                {% else %}
+                    Sync your liked songs to see stats
+                {% endif %}
+            </div>
+            <button class="sync-btn" id="syncBtn" onclick="syncLibrary()">
+    ⟳ SYNC LIBRARY
+</button>
+        </div>
+
+        {% if not synced %}
+            <p class="empty">// SYNC YOUR LIBRARY TO GET STARTED //</p>
+        {% else %}
+
+
+<!-- Degrees of separation -->
+<div class="sep-card">
+    <h2>🔗 DEGREES OF SEPARATION</h2>
+    <p style="font-size:0.65rem; color:#555; letter-spacing:1px; margin-bottom:20px; text-align:left;">How many collaboration hops connect two artists in your liked songs?</p>
+    <div class="sep-inputs">
+        <div class="sep-input-wrap">
+            <input type="text" id="sepArtist1" placeholder="FIRST ARTIST..." autocomplete="off">
+            <div class="sep-dropdown" id="sepDrop1"></div>
+        </div>
+        <div class="sep-vs">VS</div>
+        <div class="sep-input-wrap">
+            <input type="text" id="sepArtist2" placeholder="SECOND ARTIST..." autocomplete="off">
+            <div class="sep-dropdown" id="sepDrop2"></div>
+        </div>
+    </div>
+    <button class="sep-btn" id="sepBtn">⟳ FIND CONNECTION</button>
+    <div class="sep-result" id="sepResult">
+        <div class="sep-degree">
+            <div class="deg-num" id="sepDegNum"></div>
+            <div class="deg-label" id="sepDegLabel">DEGREES OF SEPARATION</div>
+        </div>
+        <div class="sep-path-label" id="sepPathLabel"></div>
+        <div class="sep-chain" id="sepChain"></div>
+        <div class="sep-songs" id="sepSongs"></div>
+    </div>
+    <div class="sep-not-found" id="sepNotFound"></div>
+</div>
+
+<!-- Liked Songs Graph Card -->
+<a href="/liked-songs-graph" class="liked-graph-card">
+    <div class="lgc-bg">
+        <canvas id="lgcCanvas"></canvas>
+        <div class="lgc-overlay"></div>
+    </div>
+    <div class="lgc-icon">🕸</div>
+    <div class="lgc-content">
+        <div class="lgc-category">◈ VISUAL · INTERACTIVE</div>
+        <div class="lgc-title">LIKED SONGS GRAPH</div>
+        <div class="lgc-desc">Explore how your liked artists connect through collaborations — interactive network map</div>
+    </div>
+    <div class="lgc-stats">
+        <div class="lgc-stat">
+            <div class="lgc-stat-val">{{ total_artists }}</div>
+            <div class="lgc-stat-label">ARTISTS</div>
+        </div>
+        <div class="lgc-stat">
+            <div class="lgc-stat-val">{{ total_songs }}</div>
+            <div class="lgc-stat-label">SONGS</div>
+        </div>
+    </div>
+</a>
+
+        <!-- Core stats -->
+        <div class="stats-grid">
+            <div class="stat-card gold-border">
+                <div class="stat-value gold">{{ total_songs }}</div>
+                <div class="stat-label">LIKED SONGS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ total_hours }}h</div>
+                <div class="stat-label">TOTAL LISTEN TIME</div>
+                <div class="stat-sub">{{ total_minutes }}m if played once each</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ total_artists }}</div>
+                <div class="stat-label">UNIQUE ARTISTS</div>
+                <div class="stat-sub">{{ repeat_artists }} with multiple likes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ total_albums }}</div>
+                <div class="stat-label">UNIQUE ALBUMS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ total_genres }}</div>
+                <div class="stat-label">GENRES</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ avg_duration_fmt }}</div>
+                <div class="stat-label">AVG SONG LENGTH</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ adds_per_month }}</div>
+                <div class="stat-label">ADDS PER MONTH</div>
+                <div class="stat-sub">avg across library age</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ library_age }}</div>
+                <div class="stat-label">LIBRARY AGE</div>
+                <div class="stat-sub">days since first like</div>
+            </div>
+        </div>
+
+        <!-- Library insights -->
+        <div class="insight-grid">
+            <div class="insight-card" style="--color:#00ff88;">
+                <div class="ic-icon">✓</div>
+                <div class="ic-val" style="--color:#00ff88;">{{ played_liked_pct }}%</div>
+                <div class="ic-label">ACTUALLY PLAYED</div>
+                <div class="ic-desc">{{ played_liked }} of your liked songs have been played via this app</div>
+            </div>
+            <div class="insight-card" style="--color:#ff00aa;">
+                <div class="ic-icon">👻</div>
+                <div class="ic-val" style="--color:#ff00aa;">{{ never_played_pct }}%</div>
+                <div class="ic-label">NEVER PLAYED</div>
+                <div class="ic-desc">{{ never_played }} liked songs you've never played since tracking started</div>
+            </div>
+            <div class="insight-card" style="--color:#ffff00;">
+                <div class="ic-icon">🔥</div>
+                <div class="ic-val" style="--color:#ffff00;">{{ max_add_streak }}</div>
+                <div class="ic-label">LONGEST ADD STREAK</div>
+                <div class="ic-desc">consecutive days you added at least one song</div>
+            </div>
+            <div class="insight-card" style="--color:#aa00ff;">
+                <div class="ic-icon">🎨</div>
+                <div class="ic-val" style="--color:#aa00ff;">{{ genre_diversity }}</div>
+                <div class="ic-label">GENRE DIVERSITY</div>
+                <div class="ic-desc">how varied your taste is across genres. Higher = more diverse</div>
+            </div>
+            <div class="insight-card" style="--color:#00ffff;">
+                <div class="ic-icon">🕐</div>
+                <div class="ic-val" style="--color:#00ffff;">
+                    {% if peak_add_hour is not none %}{{ "%02d:00" | format(peak_add_hour) }}{% else %}—{% endif %}
+                </div>
+                <div class="ic-label">PEAK ADD HOUR</div>
+                <div class="ic-desc">the time of day you most often add songs to your library</div>
+            </div>
+            <div class="insight-card" style="--color:#ff6600;">
+                <div class="ic-icon">📅</div>
+                <div class="ic-val" style="--color:#ff6600;">{{ peak_add_dow or "—" }}</div>
+                <div class="ic-label">PEAK ADD DAY</div>
+                <div class="ic-desc">the day of week you discover and save the most music</div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid">
+            <div class="chart-card">
+                <canvas id="monthlyChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <canvas id="hourChart"></canvas>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-card">
+                <canvas id="dowChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <canvas id="genreChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Mood breakdown -->
+        {% if top_moods %}
+        <div class="section">
+            <h2>🎵 MOOD BREAKDOWN</h2>
+            <div class="mood-grid">
+                {% for m in top_moods %}
+                <div class="mood-card">
+                    <div class="mc-mood">{{ m.mood }}</div>
+                    <div class="mc-count">{{ m.count }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Top artists + albums -->
+        <div class="two-col">
+            <div class="section">
+                <h2>🎤 TOP ARTISTS</h2>
+                {% set max_count = top_artists[0].count if top_artists else 1 %}
+                {% for artist in top_artists %}
+                <div class="list-item">
+                    <a href="/artist/{{ artist.name | urlencode }}"
+                       style="color:#00ffff; text-decoration:none; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:12px;">
+                        {{ artist.name }}
+                    </a>
+                    <div class="li-bar">
+                        <div class="li-fill" style="width:{{ (artist.count / max_count * 100) | round | int }}%"></div>
+                    </div>
+                    <div class="li-count">{{ artist.count }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="section">
+                <h2>💿 TOP ALBUMS</h2>
+                {% set max_count = top_albums[0].count if top_albums else 1 %}
+                {% for album in top_albums %}
+                <div class="list-item">
+                    <div style="flex:1; min-width:0;">
+                        <div class="li-name">{{ album.album }}</div>
+                        <div class="li-sub">{{ album.artist }}</div>
+                    </div>
+                    <div class="li-bar">
+                        <div class="li-fill" style="width:{{ (album.count / max_count * 100) | round | int }}%"></div>
+                    </div>
+                    <div class="li-count">{{ album.count }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Skipped liked songs -->
+        {% if skipped_liked %}
+        <div class="section">
+            <h2>⏭ LIKED BUT OFTEN SKIPPED</h2>
+            <p style="font-size:0.65rem; color:#555; letter-spacing:1px; margin-bottom:16px;">Songs you saved but tend to skip when they come on</p>
+            {% for row in skipped_liked %}
+            <div class="track-item">
+                {% if row.album_art_url %}<img src="{{ row.album_art_url }}" alt="art">{% else %}<div class="img-ph"></div>{% endif %}
+                <div style="flex:1; min-width:0;">
+                    <div class="ti-name">{{ row.track_name }}</div>
+                    <div class="ti-artist">{{ row.artists }}</div>
+                </div>
+                <div class="ti-meta">
+                    {{ row.skips }}/{{ row.plays }} skipped<br>
+                    <span style="color:#ff00aa;">{{ (row.skips / row.plays * 100) | round | int }}% skip rate</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Recently added -->
+        <div class="section">
+            <h2>✨ RECENTLY ADDED</h2>
+            {% for song in recent_liked %}
+            <div class="track-item">
+                {% if song.album_art_url %}<img src="{{ song.album_art_url }}" alt="art">{% else %}<div class="img-ph"></div>{% endif %}
+                <div style="flex:1; min-width:0;">
+                    <div class="ti-name">{{ song.track_name }}</div>
+                    <div class="ti-artist">{{ song.artists }}</div>
+                </div>
+                <div class="ti-meta">
+                    {% if song.added_at %}{{ song.added_at.strftime("%m/%d/%Y") }}{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- First and latest liked -->
+        <div class="two-col">
+            {% if first_liked %}
+            <div class="stat-card" style="text-align:left; padding:20px;">
+                <div style="font-size:0.6rem; letter-spacing:3px; color:#ff00aa; margin-bottom:12px;">🌱 FIRST EVER LIKED SONG</div>
+                <div class="track-item" style="border:none; padding:0;">
+                    {% if first_liked.album_art_url %}<img src="{{ first_liked.album_art_url }}" alt="art">{% else %}<div class="img-ph"></div>{% endif %}
+                    <div>
+                        <div class="ti-name">{{ first_liked.track_name }}</div>
+                        <div class="ti-artist">{{ first_liked.artists }}</div>
+                        {% if first_liked.added_at %}
+                        <div style="font-size:0.6rem; color:#555; margin-top:4px;">{{ first_liked.added_at.strftime("%B %d, %Y") }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            {% if latest_liked %}
+            <div class="stat-card" style="text-align:left; padding:20px;">
+                <div style="font-size:0.6rem; letter-spacing:3px; color:#ff00aa; margin-bottom:12px;">⭐ MOST RECENTLY LIKED</div>
+                <div class="track-item" style="border:none; padding:0;">
+                    {% if latest_liked.album_art_url %}<img src="{{ latest_liked.album_art_url }}" alt="art">{% else %}<div class="img-ph"></div>{% endif %}
+                    <div>
+                        <div class="ti-name">{{ latest_liked.track_name }}</div>
+                        <div class="ti-artist">{{ latest_liked.artists }}</div>
+                        {% if latest_liked.added_at %}
+                        <div style="font-size:0.6rem; color:#555; margin-top:4px;">{{ latest_liked.added_at.strftime("%B %d, %Y") }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        {% endif %}
+    </div>
+
+    {% if synced %}
+    <script>
+
+// ── Liked Graph Card — mini node network ─────────────────────────────
+const lgcCanvas = document.getElementById('lgcCanvas');
+if (lgcCanvas) {
+    const lc    = lgcCanvas.getContext('2d');
+    const nodes = Array.from({length: 18}, () => ({
+        x:     0.05 + Math.random() * 0.9,
+        y:     0.05 + Math.random() * 0.9,
+        vx:    (Math.random() - 0.5) * 0.0008,
+        vy:    (Math.random() - 0.5) * 0.0008,
+        r:     2 + Math.random() * 5,
+        color: ['#ff6600','#ffaa00','#ff4400','#ffcc00','#ff8800'][Math.floor(Math.random()*5)],
+        pulse: Math.random() * Math.PI * 2,
+    }));
+    const edges = Array.from({length: 22}, () => ({
+        a: Math.floor(Math.random() * nodes.length),
+        b: Math.floor(Math.random() * nodes.length),
+    })).filter(e => e.a !== e.b);
+    const t0lgc = Date.now();
+    function drawLGC() {
+        requestAnimationFrame(drawLGC);
+        const W = lgcCanvas.offsetWidth, H = lgcCanvas.offsetHeight;
+        if (!W || !H) return;
+        lgcCanvas.width = W; lgcCanvas.height = H;
+        lc.fillStyle = 'rgba(0,0,0,0.08)';
+        lc.fillRect(0, 0, W, H);
+        const time = (Date.now() - t0lgc) / 1000;
+        nodes.forEach(n => {
+            n.x += n.vx; n.y += n.vy;
+            if (n.x < 0.02 || n.x > 0.98) n.vx *= -1;
+            if (n.y < 0.02 || n.y > 0.98) n.vy *= -1;
+            n.pulse += 0.03;
+        });
+        // Draw curved edges
+        edges.forEach(e => {
+            const a = nodes[e.a], b = nodes[e.b];
+            const ax = a.x * W, ay = a.y * H;
+            const bx = b.x * W, by = b.y * H;
+            const cpx = (ax + bx) / 2 + (ay - by) * 0.2;
+            const cpy = (ay + by) / 2 + (bx - ax) * 0.2;
+            lc.save();
+            lc.globalAlpha  = 0.2;
+            lc.strokeStyle  = a.color;
+            lc.lineWidth    = 0.8;
+            lc.shadowColor  = a.color;
+            lc.shadowBlur   = 4;
+            lc.beginPath();
+            lc.moveTo(ax, ay);
+            lc.quadraticCurveTo(cpx, cpy, bx, by);
+            lc.stroke();
+            lc.restore();
+        });
+        nodes.forEach(n => {
+            const pr = n.r + Math.sin(n.pulse) * 1.5;
+            lc.save();
+            lc.fillStyle   = n.color;
+            lc.shadowColor = n.color;
+            lc.shadowBlur  = 16;
+            lc.globalAlpha = 0.85;
+            lc.beginPath();
+            lc.arc(n.x * W, n.y * H, pr, 0, Math.PI * 2);
+            lc.fill();
+            lc.restore();
+        });
+    }
+    drawLGC();
+}
+
+        const tooltipDefaults = {
+            backgroundColor: '#111',
+            borderColor: '#ff00ff',
+            borderWidth: 1,
+            titleColor: '#00ffff',
+            bodyColor: '#fff',
+            titleFont: { family: 'Share Tech Mono' },
+            bodyFont:  { family: 'Share Tech Mono' },
+        };
+
+        // Monthly adds
+        new Chart(document.getElementById('monthlyChart'), {
+            type: 'bar',
+            data: {
+                labels: {{ monthly_labels | tojson }},
+                datasets: [{
+                    label: 'Songs Added',
+                    data: {{ monthly_values | tojson }},
+                    backgroundColor: '#ff00ff44',
+                    borderColor: '#ff00ff',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: 'SONGS ADDED PER MONTH', color: '#ffff00', font: { family: 'Orbitron', size: 10 }, padding: { bottom: 10 } },
+                    tooltip: tooltipDefaults,
+                },
+                scales: {
+                    x: { ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 8 }, maxRotation: 45 }, grid: { color: '#ffffff0a' } },
+                    y: { ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } }
+                }
+            }
+        });
+
+        // Hour distribution
+        new Chart(document.getElementById('hourChart'), {
+            type: 'bar',
+            data: {
+                labels: Array.from({length:24}, (_,i) => `${String(i).padStart(2,'0')}:00`),
+                datasets: [{
+                    label: 'Songs Added',
+                    data: {{ hour_dist | tojson }},
+                    backgroundColor: '#00ffff44',
+                    borderColor: '#00ffff',
+                    borderWidth: 1,
+                    borderRadius: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: 'ADDS BY HOUR OF DAY', color: '#ffff00', font: { family: 'Orbitron', size: 10 }, padding: { bottom: 10 } },
+                    tooltip: tooltipDefaults,
+                },
+                scales: {
+                    x: { ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 7 }, maxRotation: 45 }, grid: { color: '#ffffff0a' } },
+                    y: { ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } }
+                }
+            }
+        });
+
+        // Day of week
+        new Chart(document.getElementById('dowChart'), {
+            type: 'bar',
+            data: {
+                labels: {{ dow_order | tojson }},
+                datasets: [{
+                    label: 'Songs Added',
+                    data: {{ dow_dist | tojson }},
+                    backgroundColor: '#ffff0044',
+                    borderColor: '#ffff00',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: 'ADDS BY DAY OF WEEK', color: '#ffff00', font: { family: 'Orbitron', size: 10 }, padding: { bottom: 10 } },
+                    tooltip: tooltipDefaults,
+                },
+                scales: {
+                    x: { ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } },
+                    y: { ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } }
+                }
+            }
+        });
+
+        // Top genres
+        const genreLabels = {{ top_genres | map(attribute='genre') | list | tojson }};
+        const genreValues = {{ top_genres | map(attribute='count') | list | tojson }};
+        const neonColors  = ['#ff00ff','#00ffff','#ffff00','#00ff88','#ff00aa','#ff6600','#aa00ff','#00aaff','#ff0066','#00ff44','#ffaa00','#0088ff','#ff00ff','#00ffff','#ffff00'];
+
+        new Chart(document.getElementById('genreChart'), {
+            type: 'bar',
+            data: {
+                labels: genreLabels,
+                datasets: [{
+                    label: 'Songs',
+                    data: genreValues,
+                    backgroundColor: neonColors.map(c => c + '88'),
+                    borderColor: neonColors,
+                    borderWidth: 1,
+                    borderRadius: 3,
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: 'TOP GENRES', color: '#ffff00', font: { family: 'Orbitron', size: 10 }, padding: { bottom: 10 } },
+                    tooltip: tooltipDefaults,
+                },
+                scales: {
+                    x: { ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } },
+                    y: {
+                        afterFit(axis) { axis.width = 110; },
+                        ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 10 }, autoSkip: false, padding: 4 },
+                        grid: { color: '#ffffff0a' }
+                    }
+                }
+            }
+        });
+
+
+        // ── Degrees of separation ─────────────────────────────────────────────────
+// ── Degrees of separation ─────────────────────────────────────────────────
+const allArtistNames = {{ all_artists | map(attribute='name') | list | tojson }};
+
+function makeSepAutofill(inputId, dropId) {
+    const input = document.getElementById(inputId);
+    const drop  = document.getElementById(dropId);
+
+    function showSuggestions(q) {
+        drop.innerHTML = '';
+        const matches = q
+            ? allArtistNames.filter(n => n.toLowerCase().includes(q.toLowerCase())).slice(0, 8)
+            : allArtistNames.slice(0, 8); // top artists by like count when empty
+        if (!matches.length) { drop.style.display = 'none'; return; }
+        drop.style.display = 'block';
+        matches.forEach(name => {
+            const item       = document.createElement('div');
+            item.className   = 'sep-dropdown-item';
+            item.textContent = name;
+            item.addEventListener('click', () => { input.value = name; drop.style.display = 'none'; });
+            drop.appendChild(item);
+        });
+    }
+
+    input.addEventListener('focus', () => showSuggestions(input.value.trim()));
+    input.addEventListener('input', () => showSuggestions(input.value.trim()));
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Escape') drop.style.display = 'none';
+        if (e.key === 'Enter') {
+            const first = drop.querySelector('.sep-dropdown-item');
+            if (first) { input.value = first.textContent; drop.style.display = 'none'; }
+        }
+    });
+    document.addEventListener('click', e => {
+        if (!e.target.closest(`#${inputId}`) && !e.target.closest(`#${dropId}`))
+            drop.style.display = 'none';
+    });
+}
+
+makeSepAutofill('sepArtist1', 'sepDrop1');
+makeSepAutofill('sepArtist2', 'sepDrop2');
+
+document.getElementById('sepBtn').addEventListener('click', async () => {
+    const a1  = document.getElementById('sepArtist1').value.trim();
+    const a2  = document.getElementById('sepArtist2').value.trim();
+    const btn = document.getElementById('sepBtn');
+    if (!a1 || !a2) return;
+    if (a1.toLowerCase() === a2.toLowerCase()) {
+        document.getElementById('sepResult').style.display   = 'none';
+        document.getElementById('sepNotFound').style.display = 'block';
+        document.getElementById('sepNotFound').textContent   = '// ENTER TWO DIFFERENT ARTISTS //';
+        return;
+    }
+    btn.textContent         = '⟳ SEARCHING...';
+    btn.style.pointerEvents = 'none';
+    try {
+        const resp = await fetch(`/liked-separation?a1=${encodeURIComponent(a1)}&a2=${encodeURIComponent(a2)}`);
+        const data = await resp.json();
+        document.getElementById('sepResult').style.display   = 'none';
+        document.getElementById('sepNotFound').style.display = 'none';
+        if (data.found) {
+            document.getElementById('sepDegNum').textContent   = data.degrees;
+            document.getElementById('sepDegLabel').textContent = data.degrees === 1
+                ? 'DEGREE OF SEPARATION · DIRECTLY CONNECTED'
+                : 'DEGREES OF SEPARATION';
+            const chain    = document.getElementById('sepChain');
+            const songsEl  = document.getElementById('sepSongs');
+            const pathLabel = document.getElementById('sepPathLabel');
+            chain.innerHTML = ''; songsEl.innerHTML = '';
+
+            if (data.degrees === 1 && data.chain.length === 1) {
+                // Direct — show path label + song pills
+                pathLabel.textContent = 'CONNECTED BY THESE TRACKS';
+                data.chain[0].songs.forEach(s => {
+                    const pill       = document.createElement('span');
+                    pill.className   = 'sep-song-pill';
+                    pill.textContent = `♦ ${s}`;
+                    songsEl.appendChild(pill);
+                });
+            } else {
+                // Multi-hop — show chain nodes + via text
+                pathLabel.textContent = 'CONNECTION PATH';
+                data.chain.forEach(step => {
+                    const row      = document.createElement('div');
+                    row.className  = 'sep-step';
+                    const from     = document.createElement('span');
+                    from.className = 'ss-from'; from.textContent = step.from;
+                    const arrow    = document.createElement('span');
+                    arrow.className = 'ss-arrow'; arrow.textContent = '→';
+                    const to       = document.createElement('span');
+                    to.className   = 'ss-to'; to.textContent = step.to;
+                    const via      = document.createElement('span');
+                    via.className  = 'ss-via';
+                    via.textContent = step.songs.length ? `via: ${step.songs.join(', ')}` : '';
+                    row.appendChild(from); row.appendChild(arrow);
+                    row.appendChild(to);   row.appendChild(via);
+                    chain.appendChild(row);
+                });
+            }
+            document.getElementById('sepResult').style.display = 'block';
+        } else {
+            document.getElementById('sepNotFound').textContent  = `// NO CONNECTION FOUND — ${data.reason || 'try different artists'} //`;
+            document.getElementById('sepNotFound').style.display = 'block';
+        }
+    } catch (err) {
+        document.getElementById('sepNotFound').textContent   = '// ERROR — TRY AGAIN //';
+        document.getElementById('sepNotFound').style.display = 'block';
+    } finally {
+        btn.textContent         = '⟳ FIND CONNECTION';
+        btn.style.pointerEvents = 'auto';
+    }
+});
+    </script>
+    {% endif %}
+</body>
+</html>

@@ -2,13 +2,19 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ARTIST GRAPH // RAVE FM</title>
+    <title>{{ graph_title | default("ARTIST GRAPH") }} // RAVE FM</title>
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap');
-
         * { margin: 0; padding: 0; box-sizing: border-box; }
-
         body {
             font-family: 'Share Tech Mono', monospace;
             height: 100vh;
@@ -16,10 +22,9 @@
             color: #fff;
             overflow: hidden;
         }
-
+        #threeCanvas { position: fixed; inset: 0; z-index: 2; }
         .bg {
-            position: fixed;
-            inset: 0;
+            position: fixed; inset: 0;
             background:
                 radial-gradient(ellipse at 20% 50%, #2d003a55 0%, transparent 60%),
                 radial-gradient(ellipse at 80% 50%, #003a2d55 0%, transparent 60%),
@@ -27,792 +32,724 @@
             animation: bgshift 6s ease-in-out infinite alternate;
             z-index: 0;
         }
-
-        @keyframes bgshift {
-            from { filter: hue-rotate(0deg); }
-            to   { filter: hue-rotate(180deg); }
-        }
-
-        svg {
-            position: fixed;
-            inset: 0;
-            z-index: 2;
-            width: 100%;
-            height: 100%;
-        }
-
-        .nav {
-            position: fixed;
-            top: 20px;
-            left: 24px;
-            z-index: 20;
-            display: flex;
-            gap: 20px;
-            align-items: center;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
+        @keyframes bgshift      { from { filter: hue-rotate(0deg); }    to { filter: hue-rotate(180deg); } }
+        @keyframes rainbowShift { 0%   { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+        @keyframes barShift     { 0%   { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+        .nav { position: fixed; top: 20px; left: 24px; z-index: 20; display: flex; gap: 20px; opacity: 0; transition: opacity 0.3s; }
         .nav.visible { opacity: 1; }
         .nav a { color: #ff00aa88; text-decoration: none; font-size: 0.72rem; letter-spacing: 2px; transition: color 0.2s; }
         .nav a:hover { color: #fff; }
-
-        .title-box {
-            position: fixed;
-            top: 20px;
-            right: 24px;
-            z-index: 20;
-            text-align: right;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
+        .title-box { position: fixed; top: 20px; right: 24px; z-index: 20; text-align: right; opacity: 0; transition: opacity 0.3s; }
         .title-box.visible { opacity: 1; }
-
         .title-box h1 {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 1.2rem;
-            font-weight: 900;
-            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
-            background-size: 300% 100%;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            animation: rainbowShift 4s linear infinite;
-            letter-spacing: 4px;
+            font-family: 'Orbitron', sans-serif; font-size: 1.2rem; font-weight: 900;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff); background-size: 300% 100%;
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+            animation: rainbowShift 4s linear infinite; letter-spacing: 4px;
         }
-
-        @keyframes rainbowShift { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
-
         .title-box .sub { font-size: 0.65rem; color: #00ffff88; letter-spacing: 3px; margin-top: 4px; }
-
         .tooltip {
-            position: fixed;
-            background: rgba(0,0,0,0.92);
-            border: 1px solid #ff00ff;
-            border-radius: 8px;
-            padding: 12px 16px;
-            font-size: 0.72rem;
-            color: #fff;
-            pointer-events: none;
-            display: none;
-            z-index: 100;
-            box-shadow: 0 0 20px #ff00ff44;
-            max-width: 260px;
+            position: fixed; background: rgba(0,0,0,0.92); border: 1px solid #ff00ff;
+            border-radius: 8px; padding: 12px 16px; font-size: 0.72rem; color: #fff;
+            pointer-events: none; display: none; z-index: 100; box-shadow: 0 0 20px #ff00ff44; max-width: 280px;
         }
-
-        .tooltip .tt-artists { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: #ff00ff; margin-bottom: 8px; letter-spacing: 1px; }
-        .tooltip .tt-count   { color: #00ffff; margin-bottom: 6px; font-size: 0.68rem; }
-        .tooltip .tt-track   { color: #ffff00; font-size: 0.65rem; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .tooltip .tt-more    { color: #555; font-size: 0.62rem; margin-top: 4px; }
-
-        .node-tooltip {
-            position: fixed;
-            background: rgba(0,0,0,0.92);
-            border: 1px solid #00ffff;
-            border-radius: 8px;
-            padding: 10px 14px;
-            font-size: 0.72rem;
-            color: #fff;
-            pointer-events: none;
-            display: none;
-            z-index: 100;
-            box-shadow: 0 0 20px #00ffff44;
+        .tooltip .tt-name    { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; color: #ff00ff; margin-bottom: 6px; letter-spacing: 1px; }
+        .tooltip .tt-plays   { color: #00ffff; font-size: 0.68rem; margin-bottom: 4px; }
+        .tooltip .tt-connect { color: #ffff00; font-size: 0.65rem; }
+        .link-tooltip {
+            position: fixed; background: rgba(0,0,0,0.92); border: 1px solid #00ffff;
+            border-radius: 8px; padding: 12px 16px; font-size: 0.72rem; color: #fff;
+            pointer-events: none; display: none; z-index: 100; box-shadow: 0 0 20px #00ffff44; max-width: 280px;
         }
-
-        .node-tooltip .nt-name  { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; color: #00ffff; margin-bottom: 4px; }
-        .node-tooltip .nt-plays { color: #ff00aa; font-size: 0.65rem; }
-
-        .search-box {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 20;
-            width: 280px;
-            opacity: 1;
-        }
-
-        .search-box input {
-            width: 100%;
-            background: rgba(0,0,0,0.8);
-            border: 1px solid #ff00ff44;
-            border-radius: 4px;
-            padding: 10px 16px;
-            color: #fff;
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 0.75rem;
-            letter-spacing: 2px;
-            outline: none;
-            transition: border-color 0.2s, box-shadow 0.2s;
-        }
-
+        .link-tooltip .lt-header { font-family: 'Orbitron', sans-serif; font-size: 0.72rem; color: #00ffff; margin-bottom: 8px; letter-spacing: 1px; }
+        .link-tooltip .lt-label  { font-size: 0.58rem; letter-spacing: 3px; color: #ffff0088; margin-bottom: 6px; }
+        .link-tooltip .lt-track  { color: #ffff00; font-size: 0.68rem; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .link-tooltip .lt-count  { color: #00ffff88; font-size: 0.62rem; margin-top: 6px; }
+        .link-tooltip .lt-more   { color: #555; font-size: 0.62rem; margin-top: 4px; }
+        .search-box { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 20; width: 280px; opacity: 1; }
+        .search-box input { width: 100%; background: rgba(0,0,0,0.8); border: 1px solid #ff00ff44; border-radius: 4px; padding: 10px 16px; color: #fff; font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; letter-spacing: 2px; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
         .search-box input:focus { border-color: #ff00ff; box-shadow: 0 0 16px #ff00ff44; }
         .search-box input::placeholder { color: #555; }
-
-        .search-results {
-            background: rgba(0,0,0,0.92);
-            border: 1px solid #ff00ff33;
-            border-top: none;
-            border-radius: 0 0 4px 4px;
-            display: none;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .search-result-item {
-            padding: 8px 16px;
-            font-size: 0.72rem;
-            letter-spacing: 1px;
-            color: #ccc;
-            cursor: pointer;
-            transition: background 0.15s;
-            border-bottom: 1px solid #ffffff0a;
-        }
-
+        .search-results { background: rgba(0,0,0,0.92); border: 1px solid #ff00ff33; border-top: none; border-radius: 0 0 4px 4px; display: none; max-height: 200px; overflow-y: auto; }
+        .search-result-item { padding: 8px 16px; font-size: 0.72rem; letter-spacing: 1px; color: #ccc; cursor: pointer; transition: background 0.15s; border-bottom: 1px solid #ffffff0a; }
         .search-result-item:hover { background: #ff00ff22; color: #ff00ff; }
-        .search-result-item:visited { color: #ccc; }
-
-        .controls {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 20;
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
+        .controls { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; opacity: 0; transition: opacity 0.3s; }
         .controls.visible { opacity: 1; }
-
-        .ctrl-btn {
-            background: rgba(0,0,0,0.7);
-            border: 1px solid #ff00ff33;
-            border-radius: 4px;
-            padding: 8px 16px;
-            color: #ff00aa88;
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 0.65rem;
-            letter-spacing: 2px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .ctrl-btn:hover, .ctrl-btn.active {
-            border-color: #ff00ff;
-            color: #ff00ff;
-            background: rgba(255,0,255,0.1);
-        }
-
-        .stats-bar {
-            position: fixed;
-            bottom: 64px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 20;
-            display: flex;
-            gap: 24px;
-            opacity: 0;
-            transition: opacity 0.3s;
-            font-size: 0.65rem;
-            letter-spacing: 2px;
-            white-space: nowrap;
-        }
-
+        .ctrl-btn { background: rgba(0,0,0,0.7); border: 1px solid #ff00ff33; border-radius: 4px; padding: 8px 14px; color: #ff00aa88; font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; letter-spacing: 2px; cursor: pointer; transition: all 0.2s; }
+        .ctrl-btn:hover, .ctrl-btn.active { border-color: #ff00ff; color: #ff00ff; background: rgba(255,0,255,0.1); }
+        .ctrl-btn.mode-3d { border-color: #00ffff44; color: #00ffff88; }
+        .ctrl-btn.mode-3d.active { border-color: #00ffff; color: #00ffff; background: rgba(0,255,255,0.1); box-shadow: 0 0 10px #00ffff44; }
+        .stats-bar { position: fixed; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; gap: 24px; opacity: 0; transition: opacity 0.3s; font-size: 0.65rem; letter-spacing: 2px; white-space: nowrap; }
         .stats-bar.visible { opacity: 1; }
         .stats-bar span { color: #555; }
         .stats-bar strong { color: #00ffff; }
-
-        .empty {
-            position: fixed;
-            inset: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 5;
-            font-family: 'Orbitron', sans-serif;
-            font-size: 1rem;
-            color: #ff00ff;
-            text-shadow: 0 0 20px #ff00ff;
-            letter-spacing: 4px;
-        }
-
+        .mode-indicator { position: fixed; top: 60px; right: 24px; z-index: 20; font-family: 'Orbitron', sans-serif; font-size: 0.65rem; letter-spacing: 3px; opacity: 0; transition: opacity 0.3s, color 0.3s; }
+        .mode-indicator.visible { opacity: 1; }
+        .mode-indicator.mode-2d { color: #ff00ff88; }
+        .mode-indicator.mode-3d { color: #00ffff88; }
+        .empty { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 5; font-family: 'Orbitron', sans-serif; font-size: 1rem; color: #ff00ff; text-shadow: 0 0 20px #ff00ff; letter-spacing: 4px; }
         .empty p { font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; color: #555; letter-spacing: 2px; margin-top: 12px; }
+        #loadingOverlay { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; pointer-events: none; }
+        .loading-title { font-family: 'Orbitron', sans-serif; font-size: 1rem; background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff); background-size: 300% 100%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: rainbowShift 2s linear infinite; letter-spacing: 4px; margin-bottom: 8px; }
+        .loading-sub { color: #555; font-size: 0.7rem; letter-spacing: 3px; margin-bottom: 8px; }
+        .loading-bar-wrap { width: 280px; height: 6px; background: #ffffff11; border-radius: 99px; overflow: hidden; margin: 12px 0 8px; }
+        .loading-bar-fill { height: 100%; width: 0%; border-radius: 99px; background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff); background-size: 300% 100%; animation: barShift 2s linear infinite; transition: width 0.3s ease; box-shadow: 0 0 10px #ff00ff88; }
+        .loading-progress { font-size: 0.65rem; color: #555; letter-spacing: 2px; }
+        #panOverlay { position: fixed; inset: 0; z-index: 3; cursor: default; display: block; }
     </style>
 </head>
 <body>
     <div class="bg"></div>
-
+    <div id="panOverlay"></div>
     <div class="nav" id="nav">
         <a href="/">⌂ HOME</a>
         <a href="/now-playing">▶ NOW PLAYING</a>
         <a href="/stats">◈ STATS</a>
         <a href="/logout">⏏ LOGOUT</a>
     </div>
-
     <div class="title-box" id="titleBox">
-        <h1>ARTIST GRAPH</h1>
-        <div class="sub">◈ {{ node_count }} ARTISTS · {{ link_count }} CONNECTIONS ◈</div>
+        <h1>{{ graph_title | default("ARTIST GRAPH") }}</h1>
+        <div class="sub">{{ graph_sub | default("◈ " + node_count|string + " ARTISTS · " + link_count|string + " CONNECTIONS ◈") }}</div>
     </div>
-
-{% if node_count == 0 %}
-<div class="empty">
-    // NO DATA YET //
-    <p>Listen to more music to build the graph</p>
-</div>
-{% else %}
-
-<!-- Add loading overlay -->
-<div id="loadingOverlay" style="
-    position: fixed;
-    inset: 0;
-    z-index: 50;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: #000;
-">
-    <div style="
-        font-family: 'Orbitron', sans-serif;
-        font-size: 1rem;
-        background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
-        background-size: 300% 100%;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        animation: rainbowShift 2s linear infinite;
-        letter-spacing: 4px;
-        margin-bottom: 16px;
-    ">BUILDING GRAPH</div>
-    <div style="color:#555; font-size:0.7rem; letter-spacing:3px;">{{ node_count }} ARTISTS · {{ link_count }} CONNECTIONS</div>
-</div>
-
-    <svg id="graph"></svg>
-
+    <div class="mode-indicator" id="modeIndicator">◈ 2D MODE</div>
+    {% if node_count == 0 %}
+    <div class="empty">
+        // NO DATA YET //
+        <p>Listen to more music to build the graph</p>
+    </div>
+    {% else %}
+    <div id="loadingOverlay">
+        <div class="loading-title">BUILDING GRAPH</div>
+        <div class="loading-sub">{{ node_count }} ARTISTS · {{ link_count }} CONNECTIONS</div>
+        <div class="loading-bar-wrap"><div class="loading-bar-fill" id="loadingBarFill"></div></div>
+        <div class="loading-progress" id="simProgress">COMPUTING LAYOUT... 0%</div>
+    </div>
+    <canvas id="threeCanvas"></canvas>
     <div class="tooltip" id="tooltip">
-        <div class="tt-artists" id="tt-artists"></div>
-        <div class="tt-count"   id="tt-count"></div>
-        <div id="tt-tracks"></div>
-        <div class="tt-more"    id="tt-more"></div>
+        <div class="tt-name"    id="tt-name"></div>
+        <div class="tt-plays"   id="tt-plays"></div>
+        <div class="tt-connect" id="tt-connect"></div>
     </div>
-
-    <div class="node-tooltip" id="nodeTooltip">
-        <div class="nt-name"  id="nt-name"></div>
-        <div class="nt-plays" id="nt-plays"></div>
+    <div class="link-tooltip" id="linkTooltip">
+        <div class="lt-header" id="lt-header"></div>
+        <div class="lt-label">♦ CONNECTED BY</div>
+        <div id="lt-tracks"></div>
+        <div class="lt-count"  id="lt-count"></div>
+        <div class="lt-more"   id="lt-more"></div>
     </div>
-
     <div class="search-box" id="searchBox">
         <input type="text" id="artistSearch" placeholder="SEARCH ARTIST..." autocomplete="off">
         <div class="search-results" id="searchResults"></div>
     </div>
-
     <div class="stats-bar" id="statsBar">
-        <span>DRAG <strong>nodes</strong></span>
-        <span>SCROLL to <strong>zoom</strong></span>
-        <span>HOVER <strong>lines</strong> for shared tracks</span>
+        <span id="statsText">LEFT DRAG to <strong>pan</strong> · SCROLL to zoom · CLICK node to focus</span>
     </div>
-
     <div class="controls" id="controls">
-        <button class="ctrl-btn active" id="btnReset">↺ RESET VIEW</button>
-        <button class="ctrl-btn active" id="btnFreeze">❄ FREEZE</button>
-        <button class="ctrl-btn" id="btnCharge">⚡ SPREAD</button>
-        <button class="ctrl-btn active" id="btnClusterColor">🎨 CLUSTER COLORS</button>
+        <button class="ctrl-btn active"  id="btnReset">↺ RESET</button>
+        <button class="ctrl-btn active"  id="btnFreeze">❄ FREEZE</button>
+        <button class="ctrl-btn"         id="btnCharge">⚡ SPREAD</button>
+        <button class="ctrl-btn active"  id="btnClusterColor">🎨 COLORS</button>
+        <button class="ctrl-btn mode-3d" id="btnToggle3D">🌐 3D MODE</button>
     </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    <script>
-        const graphData = {{ graph_data | safe }};
-        const neon      = ['#ff00ff','#00ffff','#ffff00','#00ff88','#ff00aa','#ff6600','#aa00ff','#00aaff'];
-        const tooltip   = document.getElementById('tooltip');
-        const nodeTip   = document.getElementById('nodeTooltip');
+        const graphData   = {{ graph_data | safe }};
+        const neon        = ['#ff00ff','#00ffff','#ffff00','#00ff88','#ff00aa','#ff6600','#aa00ff','#00aaff'];
+        const panOverlay  = document.getElementById('panOverlay');
+        const tooltip     = document.getElementById('tooltip');
+        const linkTooltip = document.getElementById('linkTooltip');
+
+        const IS_LARGE_GRAPH = graphData.nodes.length > 80;
+        const IS_HUGE_GRAPH  = graphData.nodes.length > 200;
+        const MAX_TICKS      = IS_HUGE_GRAPH ? 500 : IS_LARGE_GRAPH ? 300 : 800;
+        const CURVE_SEGMENTS = IS_HUGE_GRAPH ? 8 : IS_LARGE_GRAPH ? 12 : 20;
+
+        let tickCount           = 0;
+        let is3D                = false;
+        let frozen              = false;
+        let clusterColorEnabled = true;
+        let spread              = false;
 
         // ── Mouse idle ────────────────────────────────────────────────────────
         let mouseTimer = null;
-        const uiEls    = ['nav','titleBox','statsBar','controls'].map(id => document.getElementById(id));
+        const uiEls = ['nav','titleBox','statsBar','controls','modeIndicator'].map(id => document.getElementById(id));
         document.addEventListener('mousemove', () => {
             uiEls.forEach(el => el.classList.add('visible'));
             clearTimeout(mouseTimer);
             mouseTimer = setTimeout(() => uiEls.forEach(el => el.classList.remove('visible')), 3000);
         });
 
-        // ── SVG setup ─────────────────────────────────────────────────────────
-        const svg = d3.select('#graph');
-        const W   = window.innerWidth;
-        const H   = window.innerHeight;
-        const g   = svg.append('g');
-
-        const zoom = d3.zoom()
-            .scaleExtent([0.1, 4])
-            .on('zoom', (event) => g.attr('transform', event.transform));
-
-        svg.call(zoom);
-
-        // ── Defs ──────────────────────────────────────────────────────────────
-        const defs = svg.append('defs');
-
-        const filter = defs.append('filter').attr('id', 'glow');
-        filter.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'coloredBlur');
-        const feMerge = filter.append('feMerge');
-        feMerge.append('feMergeNode').attr('in', 'coloredBlur');
-        feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
-
-        graphData.nodes.forEach((node, i) => {
-            const r = nodeRadius(node);
-            defs.append('clipPath').attr('id', `clip-${i}`).append('circle').attr('r', r);
-            if (node.image) {
-                defs.append('pattern')
-                    .attr('id', `img-${i}`)
-                    .attr('patternUnits', 'objectBoundingBox')
-                    .attr('width', 1).attr('height', 1)
-                    .append('image')
-                    .attr('href', node.image)
-                    .attr('width', r * 2).attr('height', r * 2)
-                    .attr('x', 0).attr('y', 0)
-                    .attr('preserveAspectRatio', 'xMidYMid slice');
-            }
-        });
-
-        function nodeRadius(node) {
-            const base = 22, max = 52;
-            const maxP = Math.max(...graphData.nodes.map(n => n.plays));
-            return base + (node.plays / maxP) * (max - base);
-        }
-
-        function linkWidth(link) { return Math.max(1.5, Math.min(link.count * 2.5, 14)); }
-
-        // ── Detect clusters ───────────────────────────────────────────────────
-        const clusterMap = {};
-        const visited    = new Set();
-
-        function getCluster(nodeId, clusterId) {
+        // ── Cluster detection ─────────────────────────────────────────────────
+        const clusterMap = {}, visited = new Set();
+        function getCluster(nodeId, cId) {
             if (visited.has(nodeId)) return;
             visited.add(nodeId);
-            clusterMap[nodeId] = clusterId;
+            clusterMap[nodeId] = cId;
             graphData.links.forEach(l => {
-                const srcId = typeof l.source === 'object' ? l.source.id : l.source;
-                const tgtId = typeof l.target === 'object' ? l.target.id : l.target;
-                if (srcId === nodeId) getCluster(tgtId, clusterId);
-                if (tgtId === nodeId) getCluster(srcId, clusterId);
+                const s = typeof l.source === 'object' ? l.source.id : l.source;
+                const t = typeof l.target === 'object' ? l.target.id : l.target;
+                if (s === nodeId) getCluster(t, cId);
+                if (t === nodeId) getCluster(s, cId);
             });
         }
+        let cIdCounter = 0;
+        graphData.nodes.forEach(n => { if (!visited.has(n.id)) getCluster(n.id, cIdCounter++); });
+        const totalClusters = cIdCounter;
 
-        let clusterId = 0;
-        graphData.nodes.forEach(n => { if (!visited.has(n.id)) getCluster(n.id, clusterId++); });
-        const totalClusters = clusterId;
-        console.log(`[GRAPH] Detected ${totalClusters} clusters`);
-
-        // ── Assign cluster colors ─────────────────────────────────────────────
-        let clusterColorEnabled = true;
-        const clusterNeon = [
-            '#ff00ff','#00ffff','#ffff00','#00ff88',
-            '#ff00aa','#ff6600','#aa00ff','#00aaff',
-            '#ff0066','#00ff44','#ffaa00','#0088ff',
-        ];
+        const clusterNeon = ['#ff00ff','#00ffff','#ffff00','#00ff88','#ff00aa','#ff6600','#aa00ff','#00aaff','#ff0066','#00ff44','#ffaa00','#0088ff'];
         const clusterColors = {};
-        [...new Set(Object.values(clusterMap))].forEach((cid, idx) => {
-            clusterColors[cid] = clusterNeon[idx % clusterNeon.length];
+        [...new Set(Object.values(clusterMap))].forEach((cid, idx) => { clusterColors[cid] = clusterNeon[idx % clusterNeon.length]; });
+
+        function getNodeColor(node, i)  { return clusterColorEnabled ? (clusterColors[clusterMap[node.id]] || neon[i % neon.length]) : neon[i % neon.length]; }
+        function getLinkColor(link, i)  { if (clusterColorEnabled) { const s = typeof link.source === 'object' ? link.source.id : link.source; return clusterColors[clusterMap[s]] || neon[i % neon.length]; } return neon[i % neon.length]; }
+        function hexToThree(hex)        { return parseInt(hex.replace('#', ''), 16); }
+        function nodeRadius(node)       { const base = IS_LARGE_GRAPH ? 10 : 18, max = IS_LARGE_GRAPH ? 22 : 42, maxP = Math.max(...graphData.nodes.map(n => n.plays)); return base + (node.plays / maxP) * (max - base); }
+        function getBaseZ()             { return IS_HUGE_GRAPH ? 3000 : IS_LARGE_GRAPH ? 2000 : 1200; }
+        function isFocused()            { return focusedNodeId !== null; }
+        function getDefaultLinkOpacity(line) { if (!isFocused()) return 0.4; const s = line.userData.sourceId, t = line.userData.targetId; return (s === focusedNodeId || t === focusedNodeId) ? 0.9 : 0.02; }
+
+        // ── Three.js setup ────────────────────────────────────────────────────
+        const canvas   = document.getElementById('threeCanvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setClearColor(0x000000, 0);
+        renderer.sortObjects = true;
+
+        const scene  = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 100000);
+        camera.position.set(0, 0, getBaseZ());
+
+        const orbitDiv = document.createElement('div');
+        orbitDiv.style.cssText = 'position:fixed;inset:0;z-index:3;cursor:grab;';
+        const orbitControls = new OrbitControls(camera, orbitDiv);
+        orbitControls.enableDamping = true;
+        orbitControls.dampingFactor = 0.05;
+        orbitControls.enableZoom    = true;
+        orbitControls.zoomSpeed     = 1.2;
+        orbitControls.rotateSpeed   = 0.5;
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // ── Pre-position clusters in grid ─────────────────────────────────────
-        if (totalClusters > 1) {
-            const cols  = Math.ceil(Math.sqrt(totalClusters));
-            const cellW = W / cols;
-            const cellH = H / Math.ceil(totalClusters / cols);
-
-            const clusterNodes = {};
-            graphData.nodes.forEach(n => {
-                const cid = clusterMap[n.id];
-                if (!clusterNodes[cid]) clusterNodes[cid] = [];
-                clusterNodes[cid].push(n);
-            });
-
-            Object.entries(clusterNodes).forEach(([cid, nodes], idx) => {
-                const col = idx % cols;
-                const row = Math.floor(idx / cols);
-                const cx  = cellW * col + cellW / 2;
-                const cy  = cellH * row + cellH / 2;
-                nodes.forEach(n => {
-                    n.x  = cx + (Math.random() - 0.5) * cellW * 0.4;
-                    n.y  = cy + (Math.random() - 0.5) * cellH * 0.4;
-                    n.fx = null;
-                    n.fy = null;
-                });
-            });
+        // ── Texture loader ────────────────────────────────────────────────────
+        const textureLoader = new THREE.TextureLoader(), textureCache = {};
+        function loadTexture(url, cb) {
+            if (textureCache[url]) { cb(textureCache[url]); return; }
+            textureLoader.load(url, tex => { textureCache[url] = tex; cb(tex); }, undefined, () => cb(null));
         }
 
-        // ── Custom cluster separation force ───────────────────────────────────
-        function forceClusterSeparation() {
-            const strength = 0.15;
-            const minDist  = 300;
+        // ── Node meshes ───────────────────────────────────────────────────────
+        const nodeMeshes = [], nodeGlows = [], nodeIndexMap = {};
+        graphData.nodes.forEach((node, i) => {
+            nodeIndexMap[node.id] = i;
+            const r     = nodeRadius(node);
+            const color = hexToThree(getNodeColor(node, i));
 
-            return function(alpha) {
-                const centers = {}, counts = {};
-                graphData.nodes.forEach(n => {
-                    const cid = clusterMap[n.id];
-                    if (!centers[cid]) { centers[cid] = {x:0,y:0}; counts[cid] = 0; }
-                    centers[cid].x += n.x;
-                    centers[cid].y += n.y;
-                    counts[cid]++;
-                });
-                Object.keys(centers).forEach(cid => {
-                    centers[cid].x /= counts[cid];
-                    centers[cid].y /= counts[cid];
-                });
+            const glowGeo  = new THREE.RingGeometry(r + 2, r + 6, 32);
+            const glowMat  = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: node.connected ? 0.4 : 0.15, side: THREE.DoubleSide, depthWrite: false });
+            const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+            glowMesh.renderOrder = 10; glowMesh.frustumCulled = false;
+            scene.add(glowMesh); nodeGlows.push(glowMesh);
 
-                const ids = Object.keys(centers);
-                for (let i = 0; i < ids.length; i++) {
-                    for (let j = i + 1; j < ids.length; j++) {
-                        const ci   = centers[ids[i]], cj = centers[ids[j]];
-                        const dx   = ci.x - cj.x, dy = ci.y - cj.y;
-                        const dist = Math.sqrt(dx*dx + dy*dy) || 1;
-                        if (dist < minDist) {
-                            const force = (minDist - dist) / dist * strength * alpha;
-                            const fx    = dx * force, fy = dy * force;
-                            const total = counts[ids[i]] + counts[ids[j]];
-                            graphData.nodes.forEach(n => {
-                                if (clusterMap[n.id] == ids[i]) { n.vx += fx*(counts[ids[j]]/total); n.vy += fy*(counts[ids[j]]/total); }
-                                if (clusterMap[n.id] == ids[j]) { n.vx -= fx*(counts[ids[i]]/total); n.vy -= fy*(counts[ids[i]]/total); }
-                            });
-                        }
-                    }
-                }
+            const geo = new THREE.CircleGeometry(r, IS_HUGE_GRAPH ? 16 : 32);
+            const mat = new THREE.MeshBasicMaterial({ color: node.image ? 0xffffff : color, transparent: true, opacity: node.image ? 1 : 0.6, depthWrite: false });
+            if (node.image) {
+                loadTexture(node.image, tex => {
+                    if (tex) { mat.map = tex; mat.needsUpdate = true; }
+                    else     { mat.color.setHex(color); mat.opacity = 0.6; }
+                });
+            }
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.renderOrder = 20; mesh.frustumCulled = false; mesh.userData = { node, index: i };
+            scene.add(mesh); nodeMeshes.push(mesh);
+        });
+
+        // ── Link lines — curved bezier ────────────────────────────────────────
+        const linkLines = [];
+        graphData.links.forEach((link, i) => {
+            const color    = hexToThree(getLinkColor(link, i));
+            const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.4, depthTest: false, depthWrite: false });
+            const positions = new Float32Array((CURVE_SEGMENTS + 1) * 3);
+            const geometry  = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const line         = new THREE.Line(geometry, material);
+            line.renderOrder   = -10;
+            line.frustumCulled = false;
+            line.userData      = {
+                link,
+                index:    i,
+                tracks:   Array.isArray(link.tracks) ? [...link.tracks] : [],
+                sourceId: typeof link.source === 'object' ? link.source.id : link.source,
+                targetId: typeof link.target === 'object' ? link.target.id : link.target,
+                count:    link.count || 1,
+                bbox:     null,
             };
+            scene.add(line); linkLines.push(line);
+        });
+
+        // ── Force simulation ──────────────────────────────────────────────────
+        let simulation;
+        function buildSimulation(use3D) {
+            if (simulation) simulation.stop();
+            const sim = d3.forceSimulation(graphData.nodes);
+            if (use3D && typeof sim.numDimensions === 'function') sim.numDimensions(3);
+            sim
+                .force('link', d3.forceLink(graphData.links).id(d => d.id)
+                    .distance(IS_LARGE_GRAPH ? 80 : 140).strength(IS_LARGE_GRAPH ? 0.1 : 0.4))
+                .force('charge', d3.forceManyBody()
+                    .strength(IS_LARGE_GRAPH ? -500 : -400)
+                    .distanceMax(IS_LARGE_GRAPH ? 800 : 600)
+                    .theta(IS_LARGE_GRAPH ? 0.9 : 0.81))
+                .force('collision', d3.forceCollide()
+                    .radius(d => nodeRadius(d) + (IS_LARGE_GRAPH ? 20 : 30)).strength(0.8))
+                .alphaDecay(IS_LARGE_GRAPH ? 0.015 : 0.01)
+                .velocityDecay(IS_LARGE_GRAPH ? 0.5 : 0.35)
+                .stop();
+            if (use3D && typeof d3.forceZ === 'function') sim.force('z', d3.forceZ(0).strength(0.01));
+            return sim;
         }
 
-        // ── Simulation ────────────────────────────────────────────────────────
-        const simulation = d3.forceSimulation(graphData.nodes)
-            .force('link',      d3.forceLink(graphData.links).id(d => d.id).distance(160).strength(0.5))
-            .force('charge',    d3.forceManyBody().strength(-500).distanceMax(600))
-            .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 35).strength(1.0))
-            .force('cluster',   forceClusterSeparation())
-            .force('x',         d3.forceX(W / 2).strength(0.02))
-            .force('y',         d3.forceY(H / 2).strength(0.02))
-            .alphaDecay(0.015)
-            .velocityDecay(0.35);
-
-        // ── Links ─────────────────────────────────────────────────────────────
-        const link = g.append('g')
-            .selectAll('line')
-            .data(graphData.links)
-            .join('line')
-            .attr('stroke', (d, i) => {
-                if (clusterColorEnabled) {
-                    const srcId = typeof d.source === 'object' ? d.source.id : d.source;
-                    return clusterColors[clusterMap[srcId]] || neon[i % neon.length];
+        // Pre-position clusters — golden angle spiral
+        if (totalClusters > 1) {
+            const baseSpread   = IS_HUGE_GRAPH ? 1200 : IS_LARGE_GRAPH ? 700 : 350;
+            const clusterNodes = {};
+            graphData.nodes.forEach(n => { const cid = clusterMap[n.id]; if (!clusterNodes[cid]) clusterNodes[cid] = []; clusterNodes[cid].push(n); });
+            const sortedClusters = Object.entries(clusterNodes).sort((a, b) => b[1].length - a[1].length);
+            const goldenAngle    = 2.39996;
+            sortedClusters.forEach(([cid, nodes], idx) => {
+                let cx = 0, cy = 0;
+                if (idx > 0) {
+                    const angle      = idx * goldenAngle;
+                    const sizeWeight = Math.sqrt(sortedClusters[0][1].length / Math.max(nodes.length, 1));
+                    const radius     = baseSpread * (0.4 + Math.sqrt(idx) * 0.2) * Math.min(sizeWeight * 0.3 + 0.7, 1.2);
+                    cx = Math.cos(angle) * radius; cy = Math.sin(angle) * radius;
                 }
-                return neon[i % neon.length];
-            })
-            .attr('stroke-width',   d => linkWidth(d))
-            .attr('stroke-opacity', 0.5)
-            .style('cursor', 'pointer')
-            .on('mousemove', (event, d) => {
-                document.getElementById('tt-artists').textContent = `${d.source.id} × ${d.target.id}`;
-                document.getElementById('tt-count').textContent   = `${d.count} shared track${d.count > 1 ? 's' : ''}`;
-                const trackEl = document.getElementById('tt-tracks');
-                trackEl.innerHTML = '';
-                d.tracks.slice(0, 5).forEach(t => {
+                const clusterSpread = baseSpread * Math.min(0.1 + nodes.length * 0.01, 0.3);
+                nodes.forEach(n => { n.x = cx + (Math.random() - 0.5) * clusterSpread; n.y = cy + (Math.random() - 0.5) * clusterSpread; n.z = 0; n.fx = null; n.fy = null; n.fz = null; });
+            });
+        }
+
+        simulation = buildSimulation(false);
+
+        // ── Shared reusable vector ────────────────────────────────────────────
+        const tempVec = new THREE.Vector3();
+
+        // ── Update positions + cache bboxes ──────────────────────────────────
+        function updatePositions() {
+            graphData.nodes.forEach((node, i) => {
+                const x = isFinite(node.x) ? node.x : 0;
+                const y = isFinite(node.y) ? node.y : 0;
+                const z = is3D ? (isFinite(node.z) ? node.z : 0) : 0;
+                nodeMeshes[i].position.set(x, y, z);
+                nodeGlows[i].position.set(x, y, z - 0.1);
+                if (!is3D) { nodeMeshes[i].rotation.set(0, 0, 0); nodeGlows[i].rotation.set(0, 0, 0); }
+            });
+
+            linkLines.forEach(line => {
+                const link = line.userData.link;
+                const sx = isFinite(link.source.x) ? link.source.x : 0;
+                const sy = isFinite(link.source.y) ? link.source.y : 0;
+                const sz = is3D ? (isFinite(link.source.z) ? link.source.z : 0) : -1;
+                const tx = isFinite(link.target.x) ? link.target.x : 0;
+                const ty = isFinite(link.target.y) ? link.target.y : 0;
+                const tz = is3D ? (isFinite(link.target.z) ? link.target.z : 0) : -1;
+
+                // Quadratic bezier — perpendicular midpoint offset
+                const dx        = tx - sx, dy = ty - sy;
+                const len       = Math.sqrt(dx * dx + dy * dy) || 1;
+                const curvature = IS_LARGE_GRAPH ? 0.15 : 0.2;
+                const ox        = -dy / len * len * curvature;
+                const oy        =  dx / len * len * curvature;
+                const cpx       = (sx + tx) / 2 + ox;
+                const cpy       = (sy + ty) / 2 + oy;
+                const cpz       = (sz + tz) / 2;
+
+                const posAttr = line.geometry.attributes.position;
+                for (let j = 0; j <= CURVE_SEGMENTS; j++) {
+                    const t  = j / CURVE_SEGMENTS;
+                    const mt = 1 - t;
+                    const bx = mt * mt * sx + 2 * mt * t * cpx + t * t * tx;
+                    const by = mt * mt * sy + 2 * mt * t * cpy + t * t * ty;
+                    const bz = mt * mt * sz + 2 * mt * t * cpz + t * t * tz;
+                    posAttr.setXYZ(j, bx, by, bz);
+                }
+                posAttr.needsUpdate = true;
+
+                // Cache screen-space bounding box for fast mouse hit pre-cull
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                for (let j = 0; j <= CURVE_SEGMENTS; j++) {
+                    tempVec.fromBufferAttribute(posAttr, j);
+                    tempVec.project(camera);
+                    const sx2 = (tempVec.x *  0.5 + 0.5) * window.innerWidth;
+                    const sy2 = (tempVec.y * -0.5 + 0.5) * window.innerHeight;
+                    if (sx2 < minX) minX = sx2; if (sx2 > maxX) maxX = sx2;
+                    if (sy2 < minY) minY = sy2; if (sy2 > maxY) maxY = sy2;
+                }
+                line.userData.bbox = { minX, minY, maxX, maxY };
+            });
+        }
+
+        // ── Animation loop ────────────────────────────────────────────────────
+        let lastRenderTime = 0;
+        const RENDER_INTERVAL = IS_HUGE_GRAPH ? 50 : IS_LARGE_GRAPH ? 33 : 16;
+        function animate(ts) {
+            requestAnimationFrame(animate);
+            if (!frozen && tickCount < MAX_TICKS) {
+                const tpf = IS_HUGE_GRAPH ? 5 : IS_LARGE_GRAPH ? 3 : 1;
+                for (let i = 0; i < tpf; i++) { simulation.tick(); tickCount++; }
+            }
+            if (ts - lastRenderTime > RENDER_INTERVAL) { lastRenderTime = ts; updatePositions(); }
+            if (is3D) { nodeMeshes.forEach(m => m.lookAt(camera.position)); nodeGlows.forEach(g => g.lookAt(camera.position)); orbitControls.update(); }
+            renderer.render(scene, camera);
+        }
+        animate(0);
+
+        // ── 2D pan ────────────────────────────────────────────────────────────
+        let isPanning = false, panStart = { x: 0, y: 0 }, cameraStart = { x: 0, y: 0 }, zoomLevel = 1, didPan = false;
+        panOverlay.addEventListener('wheel', e => {
+            e.preventDefault();
+            zoomLevel = Math.max(0.05, Math.min(10, zoomLevel * (e.deltaY > 0 ? 0.9 : 1.1)));
+            camera.position.z = getBaseZ() / zoomLevel;
+        }, { passive: false });
+        panOverlay.addEventListener('mousedown', e => {
+            if (e.button !== 0) return;
+            isPanning = true; didPan = false;
+            panStart    = { x: e.clientX, y: e.clientY };
+            cameraStart = { x: camera.position.x, y: camera.position.y };
+            panOverlay.style.cursor = 'grabbing';
+            e.preventDefault();
+        });
+        panOverlay.addEventListener('mousemove', e => {
+            if (isPanning) {
+                const dx = e.clientX - panStart.x, dy = e.clientY - panStart.y;
+                if (Math.abs(dx) > 2 || Math.abs(dy) > 2) didPan = true;
+                const scale = camera.position.z / window.innerHeight * 2;
+                camera.position.x = cameraStart.x - dx * scale;
+                camera.position.y = cameraStart.y + dy * scale;
+                tooltip.style.display = 'none'; linkTooltip.style.display = 'none';
+                return;
+            }
+            handleMouseMove(e);
+        });
+        panOverlay.addEventListener('mouseup',    () => { isPanning = false; panOverlay.style.cursor = 'default'; });
+        panOverlay.addEventListener('mouseleave', () => { isPanning = false; panOverlay.style.cursor = 'default'; tooltip.style.display = 'none'; linkTooltip.style.display = 'none'; });
+        panOverlay.addEventListener('click', e => { if (didPan) { didPan = false; return; } handleClick(e); });
+        orbitDiv.addEventListener('mousemove', handleMouseMove);
+        orbitDiv.addEventListener('click',     handleClick);
+
+        // ── Hit testing ───────────────────────────────────────────────────────
+        const raycaster        = new THREE.Raycaster(), mouse2D = new THREE.Vector2();
+        const HIT_THRESHOLD_PX = 8;
+        const BBOX_PADDING     = 20;
+        let hoveredMesh = null, hoveredLink = null, focusedNodeId = null;
+
+        // Helper — build connected ID set for the currently focused node
+        function getFocusedConnIds() {
+            const connIds = new Set([focusedNodeId]);
+            graphData.links.forEach(l => {
+                const s = typeof l.source === 'object' ? l.source.id : l.source;
+                const t = typeof l.target === 'object' ? l.target.id : l.target;
+                if (s === focusedNodeId) connIds.add(t);
+                if (t === focusedNodeId) connIds.add(s);
+            });
+            return connIds;
+        }
+
+        // Helper — restore a mesh to its correct opacity given focus state
+        function restoreMeshOpacity(mesh, glowIdx) {
+            const node = mesh.userData.node;
+            if (isFocused()) {
+                const connIds   = getFocusedConnIds();
+                const connected = connIds.has(node.id);
+                mesh.material.opacity          = connected ? 1 : 0.08;
+                nodeGlows[glowIdx].material.opacity = connected ? 0.6 : 0.03;
+            } else {
+                mesh.material.opacity          = node.image ? 1 : 0.6;
+                nodeGlows[glowIdx].material.opacity = node.connected ? 0.4 : 0.15;
+            }
+        }
+
+        function showLinkTooltip(line, e) {
+            const srcId  = line.userData.sourceId;
+            const tgtId  = line.userData.targetId;
+            const tracks = line.userData.tracks || [];
+            const count  = line.userData.count || tracks.length;
+            document.getElementById('lt-header').textContent = `${srcId} × ${tgtId}`;
+            const trackEl = document.getElementById('lt-tracks');
+            trackEl.innerHTML = '';
+            if (tracks.length === 0) {
+                const div = document.createElement('div');
+                div.className   = 'lt-track';
+                div.textContent = '— no track data —';
+                trackEl.appendChild(div);
+            } else {
+                tracks.slice(0, 8).forEach(tr => {
                     const div = document.createElement('div');
-                    div.className   = 'tt-track';
-                    div.textContent = `♦ ${t}`;
+                    div.className   = 'lt-track';
+                    div.textContent = tr;
                     trackEl.appendChild(div);
                 });
-                document.getElementById('tt-more').textContent = d.tracks.length > 5 ? `+${d.tracks.length - 5} more` : '';
-                tooltip.style.display = 'block';
-                tooltip.style.left    = (event.clientX + 14) + 'px';
-                tooltip.style.top     = (event.clientY - 10) + 'px';
-            })
-            .on('mouseleave', () => { tooltip.style.display = 'none'; })
-            .on('mouseover', function(event, d) {
-                d3.select(this).attr('stroke-opacity', 1).attr('stroke-width', linkWidth(d) + 2);
-            })
-            .on('mouseout', function(event, d) {
-                d3.select(this).attr('stroke-opacity', 0.5).attr('stroke-width', linkWidth(d));
+            }
+            document.getElementById('lt-count').textContent = count === 1 ? '1 shared track' : `${count} shared tracks`;
+            document.getElementById('lt-more').textContent  = tracks.length > 8 ? `+${tracks.length - 8} more` : '';
+            linkTooltip.style.display = 'block';
+            linkTooltip.style.left    = (e.clientX + 14) + 'px';
+            linkTooltip.style.top     = (e.clientY - 10) + 'px';
+        }
+
+        function handleMouseMove(e) {
+            mouse2D.x =  (e.clientX / window.innerWidth)  * 2 - 1;
+            mouse2D.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse2D, camera);
+
+            // ── Node hit test ─────────────────────────────────────────────────
+            const nodeHits = raycaster.intersectObjects(nodeMeshes);
+            if (nodeHits.length > 0) {
+                const mesh = nodeHits[0].object;
+                if (hoveredMesh !== mesh) {
+                    // Restore previous hovered mesh with correct focus-aware opacity
+                    if (hoveredMesh) {
+                        restoreMeshOpacity(hoveredMesh, hoveredMesh.userData.index);
+                    }
+                    if (hoveredLink) { hoveredLink.material.opacity = getDefaultLinkOpacity(hoveredLink); hoveredLink = null; }
+                    hoveredMesh = mesh;
+                    linkTooltip.style.display = 'none';
+
+                    const { node, index } = mesh.userData;
+
+                    // If focused, don't highlight dimmed (unconnected) nodes
+                    if (isFocused()) {
+                        const connIds = getFocusedConnIds();
+                        if (!connIds.has(node.id)) {
+                            (is3D ? orbitDiv : panOverlay).style.cursor = 'default';
+                            return;
+                        }
+                    }
+
+                    const conns = graphData.links.filter(l => {
+                        const s = typeof l.source === 'object' ? l.source.id : l.source;
+                        const t = typeof l.target === 'object' ? l.target.id : l.target;
+                        return s === node.id || t === node.id;
+                    }).length;
+                    document.getElementById('tt-name').textContent    = node.id;
+                    document.getElementById('tt-plays').textContent   = `${node.plays} ${node.plays === 1 ? 'play' : 'plays'}`;
+                    document.getElementById('tt-connect').textContent = `${conns} connection${conns !== 1 ? 's' : ''}`;
+                    tooltip.style.display = 'block';
+                    mesh.material.opacity = 1; nodeGlows[index].material.opacity = 0.8;
+                    (is3D ? orbitDiv : panOverlay).style.cursor = 'pointer';
+                }
+                tooltip.style.left = (e.clientX + 14) + 'px';
+                tooltip.style.top  = (e.clientY - 10) + 'px';
+                return;
+            }
+
+            // ── Link hit test — cached bbox pre-cull + screen-space segments ──
+            let closestLine = null, closestDist = Infinity;
+
+            linkLines.forEach(line => {
+                const bb = line.userData.bbox;
+                if (!bb) return;
+                if (e.clientX < bb.minX - BBOX_PADDING || e.clientX > bb.maxX + BBOX_PADDING ||
+                    e.clientY < bb.minY - BBOX_PADDING || e.clientY > bb.maxY + BBOX_PADDING) return;
+
+                const posAttr = line.geometry.attributes.position;
+                for (let j = 0; j < CURVE_SEGMENTS; j++) {
+                    tempVec.fromBufferAttribute(posAttr, j);
+                    tempVec.project(camera);
+                    const ax = (tempVec.x *  0.5 + 0.5) * window.innerWidth;
+                    const ay = (tempVec.y * -0.5 + 0.5) * window.innerHeight;
+
+                    tempVec.fromBufferAttribute(posAttr, j + 1);
+                    tempVec.project(camera);
+                    const bx = (tempVec.x *  0.5 + 0.5) * window.innerWidth;
+                    const by = (tempVec.y * -0.5 + 0.5) * window.innerHeight;
+
+                    const mx = e.clientX, my = e.clientY;
+                    const dx = bx - ax, dy = by - ay;
+                    const lenSq = dx * dx + dy * dy;
+                    let t = lenSq > 0 ? ((mx - ax) * dx + (my - ay) * dy) / lenSq : 0;
+                    t = Math.max(0, Math.min(1, t));
+                    const px   = ax + t * dx - mx;
+                    const py   = ay + t * dy - my;
+                    const dist = Math.sqrt(px * px + py * py);
+
+                    if (dist < HIT_THRESHOLD_PX && dist < closestDist) {
+                        closestDist = dist;
+                        closestLine = line;
+                    }
+                }
             });
 
-        // ── Nodes ─────────────────────────────────────────────────────────────
-        const node = g.append('g')
-            .selectAll('g')
-            .data(graphData.nodes)
-            .join('g')
-            .style('cursor', 'grab')
-            .call(d3.drag()
-                .on('start', dragStart)
-                .on('drag',  dragging)
-                .on('end',   dragEnd)
-            );
-
-        // Glow ring — cluster color when enabled
-        node.append('circle')
-            .attr('r',                d => nodeRadius(d) + 5)
-            .attr('fill',             'none')
-            .attr('stroke',           (d, i) => clusterColorEnabled
-                ? clusterColors[clusterMap[d.id]] || neon[i % neon.length]
-                : neon[i % neon.length])
-            .attr('stroke-width',     d => d.connected ? 1.5 : 0.8)
-            .attr('opacity',          d => d.connected ? 0.5 : 0.2)
-            .attr('filter',           'url(#glow)')
-            .attr('stroke-dasharray', d => d.connected ? 'none' : '4,3');
-
-        // Image or fallback
-        node.each(function(d, i) {
-            const n = d3.select(this);
-            const r = nodeRadius(d);
-            if (d.image) {
-                n.append('circle')
-                    .attr('r', r)
-                    .attr('fill', `url(#img-${i})`)
-                    .attr('stroke', clusterColorEnabled ? clusterColors[clusterMap[d.id]] || neon[i % neon.length] : neon[i % neon.length])
-                    .attr('stroke-width', 2);
-            } else {
-                n.append('circle')
-                    .attr('r', r)
-                    .attr('fill', (clusterColorEnabled ? clusterColors[clusterMap[d.id]] : neon[i % neon.length]) + '33')
-                    .attr('stroke', clusterColorEnabled ? clusterColors[clusterMap[d.id]] || neon[i % neon.length] : neon[i % neon.length])
-                    .attr('stroke-width', 2);
-                n.append('text')
-                    .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
-                    .attr('fill', '#fff').attr('font-size', Math.max(10, r * 0.4))
-                    .attr('font-family', 'Share Tech Mono')
-                    .text(d.id.slice(0, 2).toUpperCase());
+            if (closestLine) {
+                const line = closestLine;
+                if (hoveredLink !== line) {
+                    if (hoveredMesh) { restoreMeshOpacity(hoveredMesh, hoveredMesh.userData.index); hoveredMesh = null; }
+                    if (hoveredLink) hoveredLink.material.opacity = getDefaultLinkOpacity(hoveredLink);
+                    hoveredLink = line;
+                    if (!isFocused()) line.material.opacity = 1;
+                    tooltip.style.display = 'none';
+                    (is3D ? orbitDiv : panOverlay).style.cursor = 'pointer';
+                }
+                showLinkTooltip(line, e);
+                return;
             }
-        });
 
-        // Name label
-        node.append('text')
-            .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
-            .attr('y', d => nodeRadius(d) + 14)
-            .attr('fill', (d, i) => clusterColorEnabled
-                ? clusterColors[clusterMap[d.id]] || neon[i % neon.length]
-                : neon[i % neon.length])
-            .attr('font-size', 10).attr('font-family', 'Share Tech Mono')
-            .attr('letter-spacing', 1)
-            .text(d => d.id);
-
-        // Hover
-        node.on('mousemove', (event, d) => {
-            document.getElementById('nt-name').textContent  = d.id;
-            document.getElementById('nt-plays').textContent = `${d.plays} plays in history`;
-            nodeTip.style.display = 'block';
-            nodeTip.style.left    = (event.clientX + 14) + 'px';
-            nodeTip.style.top     = (event.clientY - 10) + 'px';
-        })
-        .on('mouseleave', () => { nodeTip.style.display = 'none'; });
-
-        // Double click to unpin
-        node.on('dblclick', (event, d) => {
-            event.stopPropagation();
-            d.fx = null; d.fy = null;
-            simulation.alpha(0.1).restart();
-        });
-
-        // ── Tick ──────────────────────────────────────────────────────────────
-        simulation.on('tick', () => {
-            link
-                .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
-                .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
-            node.attr('transform', d => `translate(${d.x},${d.y})`);
-        });
-
-        // ── Drag ──────────────────────────────────────────────────────────────
-        function dragStart(event, d) {
-            event.sourceEvent.stopPropagation();
-            if (!event.active) simulation.alphaTarget(0.05).restart();
-            d.fx = d.x; d.fy = d.y;
-            d3.select(this).style('cursor', 'grabbing');
+            // ── Nothing hovered ───────────────────────────────────────────────
+            if (hoveredMesh) { restoreMeshOpacity(hoveredMesh, hoveredMesh.userData.index); hoveredMesh = null; }
+            if (hoveredLink) { hoveredLink.material.opacity = getDefaultLinkOpacity(hoveredLink); hoveredLink = null; }
+            tooltip.style.display = 'none'; linkTooltip.style.display = 'none';
+            (is3D ? orbitDiv : panOverlay).style.cursor = 'default';
         }
 
-        function dragging(event, d) {
-            const transform = d3.zoomTransform(svg.node());
-            d.fx = transform.invertX(event.sourceEvent.clientX);
-            d.fy = transform.invertY(event.sourceEvent.clientY);
+        function handleClick(e) {
+            mouse2D.x =  (e.clientX / window.innerWidth)  * 2 - 1;
+            mouse2D.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse2D, camera);
+            const hits = raycaster.intersectObjects(nodeMeshes);
+            if (hits.length > 0) focusNode(hits[0].object.userData.node);
+            else clearHighlight();
         }
 
-        function dragEnd(event, d) {
-            if (!event.active) simulation.alphaTarget(0);
-            d.fx = d.x; d.fy = d.y;
-            d3.select(this).style('cursor', 'grab');
+        // ── Focus / highlight ─────────────────────────────────────────────────
+        function focusNode(node) {
+            focusedNodeId = node.id;
+            const connIds = new Set([node.id]);
+            graphData.links.forEach(l => {
+                const s = typeof l.source === 'object' ? l.source.id : l.source;
+                const t = typeof l.target === 'object' ? l.target.id : l.target;
+                if (s === node.id) connIds.add(t);
+                if (t === node.id) connIds.add(s);
+            });
+            nodeMeshes.forEach((mesh, i) => { const c = connIds.has(graphData.nodes[i].id); mesh.material.opacity = c ? 1 : 0.08; nodeGlows[i].material.opacity = c ? 0.6 : 0.03; });
+            linkLines.forEach(line => { const s = line.userData.sourceId, t = line.userData.targetId; line.material.opacity = (s === node.id || t === node.id) ? 0.9 : 0.02; });
+            const nx = node.x || 0, ny = node.y || 0, nz = is3D ? (node.z || 0) : 0;
+            if (is3D) { camera.position.set(nx, ny, nz + nodeRadius(node) * 15); orbitControls.target.set(nx, ny, nz); }
+            else       { camera.position.x = nx; camera.position.y = ny; cameraStart = { x: nx, y: ny }; }
         }
+
+        function clearHighlight() {
+            focusedNodeId = null;
+            nodeMeshes.forEach((mesh, i) => { mesh.material.opacity = mesh.userData.node.image ? 1 : 0.6; nodeGlows[i].material.opacity = graphData.nodes[i].connected ? 0.4 : 0.15; });
+            linkLines.forEach(line => { line.material.opacity = 0.4; });
+        }
+
+        // ── 3D toggle ─────────────────────────────────────────────────────────
+        async function load3DForce() {
+            if (window.d3ForceLoaded) return;
+            try { const mod = await import('https://cdn.jsdelivr.net/npm/d3-force-3d@3/dist/d3-force-3d.esm.js'); Object.assign(d3, mod); window.d3ForceLoaded = true; }
+            catch (e) { console.warn('[3D] Could not load d3-force-3d:', e); }
+        }
+
+        function switchTo3D() {
+            document.getElementById('btnToggle3D').classList.add('active');
+            document.getElementById('btnToggle3D').textContent   = '⬜ 2D MODE';
+            document.getElementById('modeIndicator').textContent = '◈ 3D MODE';
+            document.getElementById('modeIndicator').className   = 'mode-indicator visible mode-3d';
+            document.getElementById('statsText').innerHTML       = 'DRAG to <strong>rotate</strong> · SCROLL to zoom · CLICK node to focus';
+            panOverlay.style.display = 'none';
+            document.body.appendChild(orbitDiv);
+            graphData.nodes.forEach(n => { if (!n.z || n.z === 0) n.z = (Math.random() - 0.5) * (IS_LARGE_GRAPH ? 600 : 400); });
+            simulation = buildSimulation(true); tickCount = 0; simulation.alpha(0.3).restart();
+        }
+
+        function switchTo2D() {
+            document.getElementById('btnToggle3D').classList.remove('active');
+            document.getElementById('btnToggle3D').textContent   = '🌐 3D MODE';
+            document.getElementById('modeIndicator').textContent = '◈ 2D MODE';
+            document.getElementById('modeIndicator').className   = 'mode-indicator visible mode-2d';
+            document.getElementById('statsText').innerHTML       = 'LEFT DRAG to <strong>pan</strong> · SCROLL to zoom · CLICK node to focus';
+            if (orbitDiv.parentNode) orbitDiv.parentNode.removeChild(orbitDiv);
+            panOverlay.style.display = 'block'; panOverlay.style.cursor = 'default'; isPanning = false;
+            graphData.nodes.forEach(n => { n.z = 0; });
+            simulation = buildSimulation(false); tickCount = 0; simulation.alpha(0.3).restart();
+            camera.position.set(0, 0, getBaseZ()); camera.rotation.set(0, 0, 0);
+            orbitControls.target.set(0, 0, 0); cameraStart = { x: 0, y: 0 }; zoomLevel = 1;
+        }
+
+        document.getElementById('btnToggle3D').addEventListener('click', async () => { is3D = !is3D; if (is3D) { await load3DForce(); switchTo3D(); } else switchTo2D(); });
 
         // ── Controls ──────────────────────────────────────────────────────────
-        let frozen = false;
         document.getElementById('btnFreeze').addEventListener('click', () => {
             frozen = !frozen;
-            if (frozen) {
-                simulation.stop();
-                document.getElementById('btnFreeze').textContent = '▶ UNFREEZE';
-            } else {
-                simulation.alpha(0.1).alphaTarget(0).restart();
-                document.getElementById('btnFreeze').textContent = '❄ FREEZE';
-            }
+            if (frozen) { simulation.stop(); document.getElementById('btnFreeze').textContent = '▶ UNFREEZE'; }
+            else         { simulation.alpha(0.1).restart(); document.getElementById('btnFreeze').textContent = '❄ FREEZE'; }
         });
-
         document.getElementById('btnReset').addEventListener('click', () => {
-            svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
+            camera.position.set(0, 0, getBaseZ()); camera.rotation.set(0, 0, 0);
+            orbitControls.target.set(0, 0, 0); cameraStart = { x: 0, y: 0 }; zoomLevel = 1;
             clearHighlight();
-            searchInput.value           = '';
-            searchResults.style.display = 'none';
+            document.getElementById('artistSearch').value          = '';
+            document.getElementById('searchResults').style.display = 'none';
         });
-
-        let spread = false;
         document.getElementById('btnCharge').addEventListener('click', () => {
             spread = !spread;
-            if (spread) {
-                simulation.force('link').distance(280).strength(0.3);
-                simulation.force('charge').strength(-600).distanceMax(600);
-                simulation.force('collision').radius(d => nodeRadius(d) + 40);
-                document.getElementById('btnCharge').textContent = '🔗 TIGHTEN';
-            } else {
-                simulation.force('link').distance(160).strength(0.5);
-                simulation.force('charge').strength(-500).distanceMax(600);
-                simulation.force('collision').radius(d => nodeRadius(d) + 35);
-                document.getElementById('btnCharge').textContent = '⚡ SPREAD';
-            }
-            simulation.alpha(0.3).alphaTarget(0).restart();
+            simulation.force('charge').strength(spread ? (IS_LARGE_GRAPH ? -900 : -800) : (IS_LARGE_GRAPH ? -500 : -400));
+            simulation.alpha(0.3).restart();
+            document.getElementById('btnCharge').textContent = spread ? '🔗 TIGHTEN' : '⚡ SPREAD';
+            document.getElementById('btnCharge').classList.toggle('active', spread);
         });
-
-        // ── Cluster color toggle ──────────────────────────────────────────────
         document.getElementById('btnClusterColor').addEventListener('click', () => {
             clusterColorEnabled = !clusterColorEnabled;
-            const btn = document.getElementById('btnClusterColor');
-            btn.classList.toggle('active', clusterColorEnabled);
-
-            // Update link colors
-            link.attr('stroke', (d, i) => {
-                if (clusterColorEnabled) {
-                    const srcId = typeof d.source === 'object' ? d.source.id : d.source;
-                    return clusterColors[clusterMap[srcId]] || neon[i % neon.length];
-                }
-                return neon[i % neon.length];
-            });
-
-            // Update glow rings
-            node.select('circle:first-child')
-                .attr('stroke', (d, i) => clusterColorEnabled
-                    ? clusterColors[clusterMap[d.id]] || neon[i % neon.length]
-                    : neon[i % neon.length]);
-
-            // Update image/fallback circle strokes
-            node.select('circle:nth-child(2)')
-                .attr('stroke', (d, i) => clusterColorEnabled
-                    ? clusterColors[clusterMap[d.id]] || neon[i % neon.length]
-                    : neon[i % neon.length]);
-
-            // Update name labels
-            node.selectAll('text')
-                .attr('fill', (d, i) => clusterColorEnabled
-                    ? clusterColors[clusterMap[d.id]] || neon[i % neon.length]
-                    : neon[i % neon.length]);
+            document.getElementById('btnClusterColor').classList.toggle('active', clusterColorEnabled);
+            nodeMeshes.forEach((mesh, i) => { const c = hexToThree(getNodeColor(graphData.nodes[i], i)); if (!mesh.material.map) mesh.material.color.setHex(c); nodeGlows[i].material.color.setHex(c); });
+            linkLines.forEach((line, i) => { line.material.color.setHex(hexToThree(getLinkColor(graphData.links[i], i))); });
         });
 
         // ── Search ────────────────────────────────────────────────────────────
         const searchInput   = document.getElementById('artistSearch');
         const searchResults = document.getElementById('searchResults');
         const artistNames   = graphData.nodes.map(n => n.id);
-        let   highlightedNode = null;
 
-        searchInput.addEventListener('input', () => {
-            const q = searchInput.value.trim().toLowerCase();
+        function showSearchSuggestions(q) {
             searchResults.innerHTML = '';
-            if (!q) { searchResults.style.display = 'none'; clearHighlight(); return; }
-            const matches = artistNames.filter(name => name.toLowerCase().includes(q)).slice(0, 8);
-            if (matches.length === 0) { searchResults.style.display = 'none'; return; }
+            const matches = q
+                ? artistNames.filter(n => n.toLowerCase().includes(q.toLowerCase())).slice(0, 8)
+                : artistNames.slice(0, 8);
+            if (!matches.length) { searchResults.style.display = 'none'; return; }
             searchResults.style.display = 'block';
             matches.forEach(name => {
                 const item = document.createElement('div');
                 item.className   = 'search-result-item';
                 item.textContent = name;
-                item.addEventListener('click', () => {
-                    searchInput.value           = name;
-                    searchResults.style.display = 'none';
-                    clearHighlight();
-                    focusArtist(name);
-                });
+                item.addEventListener('click', () => { searchInput.value = name; searchResults.style.display = 'none'; const node = graphData.nodes.find(n => n.id === name); if (node) focusNode(node); });
                 searchResults.appendChild(item);
             });
-        });
+        }
 
-        searchInput.addEventListener('keydown', (e) => {
+        searchInput.addEventListener('focus', () => showSearchSuggestions(searchInput.value.trim()));
+        searchInput.addEventListener('input', () => {
+            const q = searchInput.value.trim();
+            if (!q) clearHighlight();
+            showSearchSuggestions(q);
+        });
+        searchInput.addEventListener('keydown', e => {
             if (e.key === 'Escape') { searchInput.value = ''; searchResults.style.display = 'none'; clearHighlight(); }
-            if (e.key === 'Enter') {
-                const q     = searchInput.value.trim().toLowerCase();
-                const match = artistNames.find(n => n.toLowerCase() === q) || artistNames.find(n => n.toLowerCase().includes(q));
-                if (match) { searchResults.style.display = 'none'; clearHighlight(); focusArtist(match); }
-            }
+            if (e.key === 'Enter')  { const q = searchInput.value.trim().toLowerCase(); const match = artistNames.find(n => n.toLowerCase() === q) || artistNames.find(n => n.toLowerCase().includes(q)); if (match) { searchResults.style.display = 'none'; const node = graphData.nodes.find(n => n.id === match); if (node) focusNode(node); } }
         });
+        document.addEventListener('click', e => { if (!e.target.closest('#searchBox')) searchResults.style.display = 'none'; });
 
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('#searchBox')) searchResults.style.display = 'none';
-        });
+        // ── Progress bar ──────────────────────────────────────────────────────
+        const progressInterval = setInterval(() => {
+            const pct    = Math.min(100, Math.round(tickCount / MAX_TICKS * 100));
+            const textEl = document.getElementById('simProgress');
+            const barEl  = document.getElementById('loadingBarFill');
+            if (textEl) textEl.textContent = `COMPUTING LAYOUT... ${pct}%`;
+            if (barEl)  barEl.style.width  = pct + '%';
+            if (tickCount >= MAX_TICKS) clearInterval(progressInterval);
+        }, 100);
 
-        function focusArtist(name) {
-            const target = graphData.nodes.find(n => n.id === name);
-            if (!target) return;
-            clearHighlight();
-            highlightedNode = name;
-            node.each(function(d) {
-                const el = d3.select(this);
-                if (d.id === name) {
-                    el.attr('opacity', 1);
-                    el.select('circle:first-child').attr('stroke-width', 4).attr('opacity', 1);
-                    el.selectAll('text').attr('fill', '#ffff00').attr('font-size', 13);
-                } else {
-                    el.attr('opacity', 0.25);
-                }
-            });
-            link.attr('opacity', d => (d.source.id === name || d.target.id === name) ? 1 : 0.05);
-            if (target.x && target.y) {
-                const scale = 1.8;
-                svg.transition().duration(600).call(
-                    zoom.transform,
-                    d3.zoomIdentity.translate(W/2 - target.x*scale, H/2 - target.y*scale).scale(scale)
-                );
-            }
-        }
-
-        function clearHighlight() {
-            highlightedNode = null;
-            node.attr('opacity', 1);
-            node.select('circle:first-child')
-                .attr('stroke-width', d => d.connected ? 1.5 : 0.8)
-                .attr('opacity',      d => d.connected ? 0.5 : 0.2);
-            node.selectAll('text')
-                .attr('fill', (d, i) => clusterColorEnabled
-                    ? clusterColors[clusterMap[d.id]] || neon[i % neon.length]
-                    : neon[i % neon.length])
-                .attr('font-size', 10);
-            link.attr('opacity', 1);
-        }
-
-        svg.on('click', (event) => {
-            if (event.target === svg.node()) {
-                clearHighlight();
-                searchInput.value           = '';
-                searchResults.style.display = 'none';
-            }
-        });
-
-        // ── Resize ────────────────────────────────────────────────────────────
-        window.addEventListener('resize', () => {
-            simulation.force('center', d3.forceCenter(window.innerWidth / 2, window.innerHeight / 2).strength(0.05));
-            simulation.alpha(0.1).restart();
-        });
-
-        // Hide loading overlay once simulation has run a bit
-setTimeout(() => {
-    const overlay = document.getElementById('loadingOverlay');
-    if (overlay) {
-        overlay.style.transition = 'opacity 0.5s';
-        overlay.style.opacity    = '0';
-        setTimeout(() => overlay.remove(), 500);
-    }
-}, 1500);
+        // ── Hide loading overlay ──────────────────────────────────────────────
+        setTimeout(() => {
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) { overlay.style.transition = 'opacity 0.5s'; overlay.style.opacity = '0'; setTimeout(() => overlay.remove(), 500); }
+        }, IS_HUGE_GRAPH ? 5000 : IS_LARGE_GRAPH ? 3000 : 2000);
     </script>
-
     {% endif %}
 </body>
 </html>

@@ -42,3 +42,18 @@ class ArtistSpotifyID(Base):
     id          = Column(Integer, primary_key=True, index=True)
     artist_name = Column(String, nullable=False, unique=True)
     spotify_id  = Column(String, nullable=False)
+
+class LikedSong(Base):
+    __tablename__ = "liked_songs"
+
+    id            = Column(Integer, primary_key=True, index=True)
+    track_id      = Column(String, nullable=False, unique=True)
+    track_name    = Column(String, nullable=False)
+    artists       = Column(String, nullable=False)
+    album         = Column(String, nullable=False)
+    album_art_url = Column(String, nullable=True)
+    duration_ms   = Column(Integer, nullable=True)
+    added_at      = Column(DateTime, nullable=True)
+    primary_genre = Column(String, nullable=True)
+    auto_mood     = Column(String, nullable=True)
+    spotify_url   = Column(String, nullable=True)
