@@ -2959,6 +2959,7 @@ async def liked_songs_graph(request: Request, db: AsyncSession = Depends(get_db)
             "link_count":  0,
             "graph_title": "LIKED SONGS GRAPH",
             "graph_sub":   "◈ NO DATA YET — SYNC YOUR LIBRARY FIRST ◈",
+            "plays_label": "liked songs",
         })
 
     connections  = defaultdict(lambda: {"count": 0, "tracks": set()})
@@ -3005,6 +3006,7 @@ async def liked_songs_graph(request: Request, db: AsyncSession = Depends(get_db)
             "link_count":  0,
             "graph_title": "LIKED SONGS GRAPH",
             "graph_sub":   "◈ NO CONNECTIONS FOUND ◈",
+            "plays_label": "liked songs",
         })
 
     # Build ID map from ArtistSpotifyID table
@@ -3169,6 +3171,7 @@ async def liked_songs_graph(request: Request, db: AsyncSession = Depends(get_db)
         "link_count":  len(links),
         "graph_title": "LIKED SONGS GRAPH",
         "graph_sub":   f"◈ {len(nodes)} ARTISTS · {len(links)} CONNECTIONS ◈",
+        "plays_label": "liked songs",
     })
 
 @app.get("/liked-separation")
