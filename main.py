@@ -1935,6 +1935,7 @@ async def artist_deep_dive(request: Request, artist_name: str, db: AsyncSession 
     album_counter = Counter(p.album for p in plays if p.album)
     top_album     = album_counter.most_common(1)[0] if album_counter else None
     unique_albums = len(album_counter)
+    unique_tracks_count = len(set(p.track_id for p in plays))
 
     # ── Average progress ──────────────────────────────────────────────────
     avg_progress = round(sum(p.progress_pct or 0 for p in plays) / total, 1) if total else 0
@@ -2094,6 +2095,7 @@ async def artist_deep_dive(request: Request, artist_name: str, db: AsyncSession 
         "hour_dist":           hour_dist,
         "artist_image":        artist_image,
         "unique_albums":       unique_albums_count,
+        "unique_tracks": unique_tracks_count,
         "first_play":          first_play,
         "last_play":           last_play,
         "days_since_first":    days_since_first,
@@ -2798,17 +2800,7 @@ async def liked_songs(request: Request, db: AsyncSession = Depends(get_db)):
     total_albums   = len(album_counter)
     top_albums     = [{"album": k[0], "artist": k[1], "count": v} for k, v in album_counter.most_common(10)]
 
-    # ── Genres ────────────────────────────────────────────────────────────
-    genre_counter = Counter()
-    for s in all_songs:
-        if s.primary_genre:
-            for g in s.primary_genre.split(","):
-                g = g.strip().lower()
-                if g:
-                    genre_counter[g] += 1
 
-    total_genres = len(genre_counter)
-    top_genres   = [{"genre": g, "count": c} for g, c in genre_counter.most_common(15)]
 
     # ── Moods ─────────────────────────────────────────────────────────────
     mood_counter  = Counter(s.auto_mood for s in all_songs if s.auto_mood and s.auto_mood != "UNKNOWN")
@@ -2887,12 +2879,6 @@ async def liked_songs(request: Request, db: AsyncSession = Depends(get_db)):
     # ── Recently added ────────────────────────────────────────────────────
     recent_liked = sorted(songs_with_date, key=lambda s: s.added_at, reverse=True)[:20]
 
-    # ── Genre diversity score ─────────────────────────────────────────────
-    # Higher = more diverse taste
-    if total_genres > 0 and total_songs > 0:
-        genre_diversity = round(min(100, (total_genres / total_songs * 100) * 3), 1)
-    else:
-        genre_diversity = 0
 
     # ── Average song duration ─────────────────────────────────────────────
     durations     = [s.duration_ms for s in all_songs if s.duration_ms]
@@ -2907,11 +2893,9 @@ async def liked_songs(request: Request, db: AsyncSession = Depends(get_db)):
         "total_minutes":    total_minutes,
         "total_artists":    total_artists,
         "total_albums":     total_albums,
-        "total_genres":     total_genres,
         "top_artists":    top_artists,
         "all_artists":    [{"name": a, "count": c} for a, c in artist_counter.most_common()],
         "top_albums":       top_albums,
-        "top_genres":       top_genres,
         "top_moods":        top_moods,
         "dominant_mood":    dominant_mood,
         "hour_dist":        hour_dist,
@@ -2932,7 +2916,6 @@ async def liked_songs(request: Request, db: AsyncSession = Depends(get_db)):
         "played_liked_pct": played_liked_pct,
         "skipped_liked":    skipped_liked,
         "recent_liked":     recent_liked,
-        "genre_diversity":  genre_diversity,
         "avg_duration_fmt": avg_duration_fmt,
         "solo_artists":     solo_artists,
         "repeat_artists":   repeat_artists,

@@ -580,10 +580,6 @@ async function syncLibrary() {
                 <div class="stat-label">UNIQUE ALBUMS</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ total_genres }}</div>
-                <div class="stat-label">GENRES</div>
-            </div>
-            <div class="stat-card">
                 <div class="stat-value">{{ avg_duration_fmt }}</div>
                 <div class="stat-label">AVG SONG LENGTH</div>
             </div>
@@ -619,12 +615,6 @@ async function syncLibrary() {
                 <div class="ic-label">LONGEST ADD STREAK</div>
                 <div class="ic-desc">consecutive days you added at least one song</div>
             </div>
-            <div class="insight-card" style="--color:#aa00ff;">
-                <div class="ic-icon">🎨</div>
-                <div class="ic-val" style="--color:#aa00ff;">{{ genre_diversity }}</div>
-                <div class="ic-label">GENRE DIVERSITY</div>
-                <div class="ic-desc">how varied your taste is across genres. Higher = more diverse</div>
-            </div>
             <div class="insight-card" style="--color:#00ffff;">
                 <div class="ic-icon">🕐</div>
                 <div class="ic-val" style="--color:#00ffff;">
@@ -654,9 +644,6 @@ async function syncLibrary() {
         <div class="charts-grid">
             <div class="chart-card">
                 <canvas id="dowChart"></canvas>
-            </div>
-            <div class="chart-card">
-                <canvas id="genreChart"></canvas>
             </div>
         </div>
 
@@ -953,43 +940,6 @@ if (lgcCanvas) {
             }
         });
 
-        // Top genres
-        const genreLabels = {{ top_genres | map(attribute='genre') | list | tojson }};
-        const genreValues = {{ top_genres | map(attribute='count') | list | tojson }};
-        const neonColors  = ['#ff00ff','#00ffff','#ffff00','#00ff88','#ff00aa','#ff6600','#aa00ff','#00aaff','#ff0066','#00ff44','#ffaa00','#0088ff','#ff00ff','#00ffff','#ffff00'];
-
-        new Chart(document.getElementById('genreChart'), {
-            type: 'bar',
-            data: {
-                labels: genreLabels,
-                datasets: [{
-                    label: 'Songs',
-                    data: genreValues,
-                    backgroundColor: neonColors.map(c => c + '88'),
-                    borderColor: neonColors,
-                    borderWidth: 1,
-                    borderRadius: 3,
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    title: { display: true, text: 'TOP GENRES', color: '#ffff00', font: { family: 'Orbitron', size: 10 }, padding: { bottom: 10 } },
-                    tooltip: tooltipDefaults,
-                },
-                scales: {
-                    x: { ticks: { color: '#00ffff', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: '#ffffff0a' } },
-                    y: {
-                        afterFit(axis) { axis.width = 110; },
-                        ticks: { color: '#ff00aa', font: { family: 'Share Tech Mono', size: 10 }, autoSkip: false, padding: 4 },
-                        grid: { color: '#ffffff0a' }
-                    }
-                }
-            }
-        });
 
 
         // ── Degrees of separation ─────────────────────────────────────────────────
