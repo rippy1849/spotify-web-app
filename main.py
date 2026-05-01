@@ -265,11 +265,11 @@ async def auth_redirect(request: Request, code: str = None, state: str = None, e
     return RedirectResponse("/")
 
 
-@app.get("/logout")
-async def logout():
-    token_store.clear()
-    save_token_store()  # ← clear saved tokens on logout
-    return RedirectResponse("/")
+# @app.get("/logout")
+# async def logout():
+#     token_store.clear()
+#     save_token_store()  # ← clear saved tokens on logout
+#     return RedirectResponse("/")
 
 
 @app.get("/now-playing", response_class=HTMLResponse)
