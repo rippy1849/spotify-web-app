@@ -40,7 +40,7 @@ A self-hosted Spotify listening tracker and analytics dashboard with real-time m
 
 ### 1. Clone the repository
 
-    git clone https://github.com/yourusername/rave-fm.git
+    git clone https://github.com/rippy1849/spotify-web-app.git
     cd rave-fm
 
 ### 2. Create a virtual environment
