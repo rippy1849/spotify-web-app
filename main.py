@@ -3717,3 +3717,249 @@ async def year_review_data(request: Request, year: str, db: AsyncSession = Depen
             "comeback_date":    comeback_date,
         },
     })
+
+@app.get("/liked-songs-graph-progress")
+async def liked_songs_graph_progress(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return {"error": "not authenticated"}
+
+    from itertools import combinations
+    from datetime import timedelta as td2
+    from fastapi.responses import StreamingResponse
+    import json
+    import time
+
+    async def generate():
+        def event(msg: str, pct: int, done: bool = False, final: str = None):
+            payload = {"msg": msg, "pct": pct, "done": done}
+            if final:
+                payload["final"] = final
+            return f"data: {json.dumps(payload)}\n\n"
+
+        yield event("Loading liked songs...", 5)
+
+        all_q     = select(LikedSong).order_by(LikedSong.added_at.asc())
+        all_songs = (await db.execute(all_q)).scalars().fetchall()
+
+        if not all_songs:
+            yield event("No liked songs found", 100, done=True)
+            return
+
+        yield event(f"Found {len(all_songs)} liked songs — building connections...", 8)
+
+        connections  = defaultdict(lambda: {"count": 0, "tracks": set()})
+        artist_count = Counter()
+
+        for song in all_songs:
+            if not song.artists:
+                continue
+            artists = [a.strip() for a in song.artists.split(",") if a.strip()]
+            for a in artists:
+                artist_count[a] += 1
+            if len(artists) > 1:
+                for a1, a2 in combinations(sorted(artists), 2):
+                    key = (a1, a2)
+                    connections[key]["count"]  += 1
+                    connections[key]["tracks"].add(song.track_name)
+
+        connected_artists_set = set()
+        for (a1, a2) in connections:
+            connected_artists_set.add(a1)
+            connected_artists_set.add(a2)
+
+        all_artists = set(artist_count.keys())
+        total       = len(all_artists)
+
+        yield event(f"Found {total} artists — fetching images...", 18)
+
+        # Build ID map from ArtistSpotifyID table [4]
+        artist_id_map = {}
+        id_table_q    = select(ArtistSpotifyID)
+        id_table_rows = (await db.execute(id_table_q)).fetchall()
+        for row in id_table_rows:
+            artist_id_map[row[0].artist_name] = row[0].spotify_id
+
+        artist_images = {}
+
+        async def save_cache(name: str, image_url: str):
+            if not image_url:
+                return
+            async with AsyncSessionLocal() as cache_db:
+                existing_q = select(ArtistCache).where(
+                    ArtistCache.artist_name == name,
+                    ArtistCache.track_name  == None,
+                ).limit(1)
+                existing = (await cache_db.execute(existing_q)).scalar_one_or_none()
+                if existing:
+                    existing.image_url = image_url
+                    await cache_db.commit()
+                else:
+                    cache_db.add(ArtistCache(
+                        artist_name = name,
+                        track_name  = None,
+                        image_url   = image_url,
+                    ))
+                    await cache_db.commit()
+
+        async def fetch_artist_image(artist_name: str):
+            # Check cache first [4]
+            async with AsyncSessionLocal() as cache_db:
+                cache_q = select(ArtistCache).where(
+                    ArtistCache.artist_name == artist_name,
+                    ArtistCache.track_name  == None,
+                    ArtistCache.image_url   != None,
+                    ArtistCache.fetched_at  >= datetime.now(TIMEZONE) - td2(days=7),
+                ).limit(1)
+                cached = (await cache_db.execute(cache_q)).scalar_one_or_none()
+                if cached and cached.image_url:
+                    artist_images[artist_name] = cached.image_url
+                    return
+
+            try:
+                spotify_id = artist_id_map.get(artist_name)
+                if spotify_id:
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        resp = await client.get(
+                            f"https://api.spotify.com/v1/artists/{spotify_id}",
+                            headers={"Authorization": f"Bearer {token_store['access_token']}"},
+                        )
+                    if resp.status_code == 200:
+                        images    = resp.json().get("images", [])
+                        image_url = images[-1]["url"] if images else None
+                        artist_images[artist_name] = image_url
+                        await save_cache(artist_name, image_url)
+                        return
+                    elif resp.status_code == 429:
+                        artist_images[artist_name] = None
+                        return
+
+                encoded = urllib.parse.quote(artist_name)
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get(
+                        f"https://api.spotify.com/v1/search?q={encoded}&type=artist&limit=5",
+                        headers={"Authorization": f"Bearer {token_store['access_token']}"},
+                    )
+                if resp.status_code == 429:
+                    artist_images[artist_name] = None
+                    return
+                if resp.status_code == 200:
+                    items        = resp.json().get("artists", {}).get("items", [])
+                    artist_lower = artist_name.lower().strip()
+                    matched      = None
+                    for item in items:
+                        if item["name"].lower().strip() == artist_lower:
+                            matched = item
+                            break
+                    if matched:
+                        images    = matched.get("images", [])
+                        image_url = images[-1]["url"] if images else None
+                        artist_images[artist_name] = image_url
+                        await save_cache(artist_name, image_url)
+                        try:
+                            async with AsyncSessionLocal() as id_db:
+                                existing_q = select(ArtistSpotifyID).where(
+                                    ArtistSpotifyID.artist_name == artist_name
+                                )
+                                existing = (await id_db.execute(existing_q)).scalar_one_or_none()
+                                if not existing:
+                                    id_db.add(ArtistSpotifyID(
+                                        artist_name = artist_name,
+                                        spotify_id  = matched["id"],
+                                    ))
+                                    await id_db.commit()
+                        except Exception:
+                            pass
+                    else:
+                        artist_images[artist_name] = None
+            except Exception:
+                artist_images[artist_name] = None
+
+        # Known IDs first — they are faster [3]
+        known_id_artists   = [a for a in all_artists if a in artist_id_map]
+        unknown_id_artists = [a for a in all_artists if a not in artist_id_map]
+        artist_list        = known_id_artists + unknown_id_artists[:50]
+
+        batch_size  = 5
+        fetch_start = time.time()
+        processed   = 0
+
+        for i in range(0, len(artist_list), batch_size):
+            # Hard stop after 60 seconds for large libraries [3]
+            if time.time() - fetch_start > 60:
+                yield event(f"Image fetch timeout — continuing with {processed}/{len(artist_list)}", 85)
+                break
+            batch          = artist_list[i:i + batch_size]
+            is_known_batch = all(a in artist_id_map for a in batch)
+            await asyncio.gather(*[fetch_artist_image(a) for a in batch])
+            await asyncio.sleep(0.1 if is_known_batch else 0.3)
+            processed += len(batch)
+            # Image fetching runs from 18% to 85%
+            pct = 18 + int((processed / len(artist_list)) * 67)
+            yield event(f"Fetching artist images... {processed}/{len(artist_list)}", pct)
+
+        yield event("Building nodes...", 88)
+        await asyncio.sleep(0.3)
+
+        nodes = []
+        for artist in all_artists:
+            nodes.append({
+                "id":        artist,
+                "image":     artist_images.get(artist),
+                "plays":     artist_count.get(artist, 1),
+                "connected": artist in connected_artists_set,
+            })
+
+        yield event(f"Built {len(nodes)} nodes — building connections...", 93)
+        await asyncio.sleep(0.3)
+
+        links = []
+        for (a1, a2), data in connections.items():
+            if a1 not in all_artists or a2 not in all_artists:
+                continue
+            seen          = set()
+            unique_tracks = []
+            for track in data["tracks"]:
+                if track.lower().strip() not in seen:
+                    seen.add(track.lower().strip())
+                    unique_tracks.append(track)
+            links.append({
+                "source": a1,
+                "target": a2,
+                "count":  len(unique_tracks),
+                "tracks": unique_tracks,
+            })
+
+        yield event(f"Built {len(links)} connections — serializing...", 97)
+        await asyncio.sleep(0.3)
+
+        graph_data = json.dumps({"nodes": nodes, "links": links})
+
+        # Only emit 100% and final data after everything is genuinely ready [3]
+        final = json.dumps({
+            "graph_data": graph_data,
+            "node_count": len(nodes),
+            "link_count": len(links),
+        })
+        yield event("Done!", 100, done=True, final=final)
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+@app.post("/liked-songs-graph-render", response_class=HTMLResponse)
+async def liked_songs_graph_render_post(request: Request):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+    import json
+    form       = await request.form()
+    graph_data = form.get("graph_data", '{"nodes":[],"links":[]}')
+    parsed     = json.loads(graph_data)
+    node_count = len(parsed.get("nodes", []))
+    link_count = len(parsed.get("links", []))
+    return templates.TemplateResponse("artist_graph.html", {
+        "request":     request,
+        "graph_data":  graph_data,
+        "node_count":  node_count,
+        "link_count":  link_count,
+        "graph_title": "LIKED SONGS GRAPH",
+        "graph_sub":   f"◈ {node_count} ARTISTS · {link_count} CONNECTIONS ◈",
+        "plays_label": "liked songs",
+    })

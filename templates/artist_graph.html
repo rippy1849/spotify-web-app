@@ -153,11 +153,29 @@
         <button class="ctrl-btn mode-3d" id="btnToggle3D">🌐 3D MODE</button>
     </div>
     <script type="module">
+
+
+// If we have pre-built graph data from the progress stream, use it
+const _storedData = sessionStorage.getItem('likedGraphData');
+if (_storedData) {
+    const _nodeCount = sessionStorage.getItem('likedGraphNodeCount');
+    const _linkCount = sessionStorage.getItem('likedGraphLinkCount');
+    // Update subtitle
+    const subEl = document.querySelector('.title-box .sub');
+    if (subEl) subEl.textContent = `◈ ${_nodeCount} ARTISTS · ${_linkCount} CONNECTIONS ◈`;
+    // Clear so it doesn't persist on refresh
+    sessionStorage.removeItem('likedGraphData');
+    sessionStorage.removeItem('likedGraphNodeCount');
+    sessionStorage.removeItem('likedGraphLinkCount');
+}
+
+const graphData  = _storedData ? JSON.parse(_storedData) : {{ graph_data | safe }};
+const playsLabel = {{ (plays_label | default("plays")) | tojson }};
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        const graphData  = {{ graph_data | safe }};
-        const playsLabel = {{ (plays_label | default("plays")) | tojson }};
+        // const graphData  = {{ graph_data | safe }};
+        // const playsLabel = {{ (plays_label | default("plays")) | tojson }};
         const neon       = ['#ff00ff','#00ffff','#ffff00','#00ff88','#ff00aa','#ff6600','#aa00ff','#00aaff'];
         const panOverlay  = document.getElementById('panOverlay');
         const tooltip     = document.getElementById('tooltip');
