@@ -320,6 +320,60 @@
             .card-e    { grid-column: 1; grid-row: 7; }
             .small-grid { grid-template-columns: repeat(3, 1fr); }
         }
+
+        /* ── Artist graph progress ── */
+.graph-progress-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgba(0,0,0,0.92);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+}
+.graph-progress-overlay.visible { display: flex; }
+.gpo-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1rem;
+    font-weight: 900;
+    background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: rainbowShift 4s linear infinite;
+    letter-spacing: 4px;
+}
+.gpo-msg {
+    font-size: 0.72rem;
+    color: #888;
+    letter-spacing: 2px;
+    min-height: 20px;
+}
+.gpo-bar-wrap {
+    width: 320px;
+    height: 6px;
+    background: #ffffff11;
+    border-radius: 99px;
+    overflow: hidden;
+}
+.gpo-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+    background-size: 300%;
+    animation: rainbowShift 2s linear infinite;
+    transition: width 0.4s ease;
+    box-shadow: 0 0 10px #ff00ff88;
+}
+.gpo-pct {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.7rem;
+    color: #ff00ff;
+    letter-spacing: 2px;
+}
     </style>
 </head>
 <body>
@@ -412,7 +466,7 @@
             </a>
 
             <!-- ARTIST GRAPH -->
-            <a href="/artist-graph" class="mag-card card-c" style="--color:#ff6600;">
+            <a href="/artist-graph" class="mag-card card-c" style="--color:#ff6600;" id="graphCard" onclick="loadArtistGraph(event)">
                 <div class="card-bg">
                     <canvas id="graphCanvas"></canvas>
                     <div class="overlay"></div>
@@ -941,6 +995,73 @@ if (compareCanvas) {
             }
             drawArtist();
         }
+
+        // ── Artist graph progress loader ──────────────────────────────────────────
+async function loadArtistGraph(e) {
+    e.preventDefault();
+
+    const overlay = document.getElementById('graphProgressOverlay');
+    const bar     = document.getElementById('gpoBar');
+    const msg     = document.getElementById('gpoMsg');
+    const pct     = document.getElementById('gpoPct');
+
+    overlay.classList.add('visible');
+
+    const es = new EventSource('/artist-graph-progress');
+
+    es.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+
+        msg.textContent = data.msg || '';
+        bar.style.width = (data.pct || 0) + '%';
+        pct.textContent = (data.pct || 0) + '%';
+
+        if (data.final) {
+            es.close();
+            const final = JSON.parse(data.final);
+
+            // Green completion flash
+            bar.style.background = '#00ff88';
+            bar.style.boxShadow  = '0 0 16px #00ff8888';
+            msg.textContent      = 'Opening graph...';
+
+            setTimeout(() => {
+                const form  = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/artist-graph-render';
+                const input = document.createElement('input');
+                input.type  = 'hidden';
+                input.name  = 'graph_data';
+                input.value = final.graph_data;
+                form.appendChild(input);
+                document.body.appendChild(form);
+                form.submit();
+            }, 400);
+        }
+    };
+
+    es.onerror = () => {
+        es.close();
+        msg.textContent      = '✗ ERROR — RETRYING...';
+        bar.style.background = '#ff00aa';
+        setTimeout(() => {
+            overlay.classList.remove('visible');
+            bar.style.width      = '0%';
+            bar.style.background = '';
+            pct.textContent      = '0%';
+        }, 2000);
+    };
+}
     </script>
+
+    <!-- Artist graph progress overlay -->
+<div class="graph-progress-overlay" id="graphProgressOverlay">
+    <div class="gpo-title">BUILDING ARTIST GRAPH</div>
+    <div class="gpo-msg"  id="gpoMsg">Starting...</div>
+    <div class="gpo-bar-wrap">
+        <div class="gpo-bar-fill" id="gpoBar" style="width:0%"></div>
+    </div>
+    <div class="gpo-pct" id="gpoPct">0%</div>
+</div>
 </body>
 </html>

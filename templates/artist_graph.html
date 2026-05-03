@@ -241,6 +241,7 @@ const playsLabel = {{ (plays_label | default("plays")) | tojson }};
         // ── Three.js setup ────────────────────────────────────────────────────
         const canvas   = document.getElementById('threeCanvas');
         const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setClearColor(0x000000, 0);
@@ -289,9 +290,16 @@ const playsLabel = {{ (plays_label | default("plays")) | tojson }};
             const mat = new THREE.MeshBasicMaterial({ color: node.image ? 0xffffff : color, transparent: true, opacity: node.image ? 1 : 0.6, depthWrite: false });
             if (node.image) {
                 loadTexture(node.image, tex => {
-                    if (tex) { mat.map = tex; mat.needsUpdate = true; }
-                    else     { mat.color.setHex(color); mat.opacity = 0.6; }
-                });
+    if (tex) {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        mat.map        = tex;
+        mat.color.setHex(0xffffff);
+        mat.needsUpdate = true;
+    } else {
+        mat.color.setHex(color);
+        mat.opacity = 0.6;
+    }
+});
             }
             const mesh = new THREE.Mesh(geo, mat);
             mesh.renderOrder = 20; mesh.frustumCulled = false; mesh.userData = { node, index: i };

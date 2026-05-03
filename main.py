@@ -1754,13 +1754,18 @@ async def time_machine(request: Request, db: AsyncSession = Depends(get_db)):
     if "access_token" not in token_store:
         return RedirectResponse("/")
 
-    # Get all available dates
-    dates_q = (
-        select(func.strftime('%Y-%m-%d', TrackPlay.listened_at).label("day"))
-        .group_by(func.strftime('%Y-%m-%d', TrackPlay.listened_at))
-        .order_by(func.strftime('%Y-%m-%d', TrackPlay.listened_at).desc())
-    )
-    available_dates = [r.day for r in (await db.execute(dates_q)).fetchall()]
+    from zoneinfo import ZoneInfo
+
+    # Build available dates in local timezone
+    all_plays_q = select(TrackPlay.listened_at)
+    all_plays   = (await db.execute(all_plays_q)).fetchall()
+
+    available_dates = sorted(set(
+        p.listened_at.replace(tzinfo=ZoneInfo("UTC"))
+                     .astimezone(TIMEZONE)
+                     .strftime("%Y-%m-%d")
+        for p in all_plays
+    ), reverse=True)
 
     return templates.TemplateResponse("time_machine.html", {
         "request":         request,
@@ -1768,6 +1773,133 @@ async def time_machine(request: Request, db: AsyncSession = Depends(get_db)):
         "selected_date":   None,
         "plays":           [],
         "stats":           None,
+    })
+
+
+@app.get("/time-machine/{date}", response_class=HTMLResponse)
+async def time_machine_date(request: Request, date: str, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+
+    from zoneinfo import ZoneInfo
+    from datetime import datetime as dt2
+
+    # Build available dates in local timezone
+    all_plays_q = select(TrackPlay.listened_at)
+    all_plays   = (await db.execute(all_plays_q)).fetchall()
+
+    available_dates = sorted(set(
+        p.listened_at.replace(tzinfo=ZoneInfo("UTC"))
+                     .astimezone(TIMEZONE)
+                     .strftime("%Y-%m-%d")
+        for p in all_plays
+    ), reverse=True)
+
+    # Convert selected local date to UTC window for query [3]
+    local_start = dt2.strptime(date, "%Y-%m-%d").replace(tzinfo=TIMEZONE)
+    local_end   = local_start + timedelta(days=1)
+    utc_start   = local_start.astimezone(ZoneInfo("UTC"))
+    utc_end     = local_end.astimezone(ZoneInfo("UTC"))
+
+    plays_q = (
+        select(TrackPlay)
+        .where(TrackPlay.listened_at >= utc_start)
+        .where(TrackPlay.listened_at < utc_end)
+        .order_by(TrackPlay.listened_at.asc())
+    )
+    plays = (await db.execute(plays_q)).scalars().fetchall()
+
+    stats = None
+    if plays:
+        total     = len(plays)
+        skips     = sum(1 for p in plays if p.was_skipped)
+        minutes   = round(sum(p.progress_ms for p in plays) / 60000, 1)
+        skip_rate = round(skips / total * 100, 1) if total else 0
+
+        # Top artist
+        artist_counter = Counter()
+        for p in plays:
+            if p.artists:
+                for a in p.artists.split(","):
+                    a = a.strip()
+                    if a:
+                        artist_counter[a] += 1
+        top_artist = artist_counter.most_common(1)[0] if artist_counter else None
+
+        # Top track
+        track_counter = Counter(p.track_name for p in plays)
+        top_track     = track_counter.most_common(1)[0] if track_counter else None
+
+        # Dominant mood
+        mood_counter  = Counter(p.auto_mood for p in plays if p.auto_mood and p.auto_mood != "UNKNOWN")
+        dominant_mood = mood_counter.most_common(1)[0][0] if mood_counter else "UNKNOWN"
+
+        # Top genre
+        genre_counter = Counter()
+        for p in plays:
+            if p.primary_genre:
+                for g in p.primary_genre.split(","):
+                    g = g.strip().lower()
+                    if g:
+                        genre_counter[g] += 1
+        top_genre = genre_counter.most_common(1)[0][0] if genre_counter else None
+
+        # Peak hour — convert to local timezone for display [3]
+        hour_counter = Counter(
+            p.listened_at.replace(tzinfo=ZoneInfo("UTC"))
+                         .astimezone(TIMEZONE)
+                         .hour
+            for p in plays
+        )
+        peak_hour = hour_counter.most_common(1)[0] if hour_counter else None
+
+        # First and last track
+        first_track = plays[0]
+        last_track  = plays[-1]
+
+        # Unique counts
+        unique_tracks = len(set(p.track_id for p in plays))
+        unique_artists = len(set(
+            a.strip()
+            for p in plays if p.artists
+            for a in p.artists.split(",")
+            if a.strip()
+        ))
+
+        # Compare to average day
+        avg_plays_q    = (
+            select(func.count().label("cnt"))
+            .select_from(TrackPlay)
+            .group_by(func.strftime('%Y-%m-%d', TrackPlay.listened_at))
+        )
+        all_day_counts = [r.cnt for r in (await db.execute(avg_plays_q)).fetchall()]
+        avg_plays      = round(sum(all_day_counts) / len(all_day_counts), 1) if all_day_counts else 0
+        vs_average     = round(((total - avg_plays) / avg_plays * 100), 1) if avg_plays else 0
+
+        stats = {
+            "total":          total,
+            "skips":          skips,
+            "skip_rate":      skip_rate,
+            "minutes":        minutes,
+            "top_artist":     top_artist,
+            "top_track":      top_track,
+            "dominant_mood":  dominant_mood,
+            "top_genre":      top_genre,
+            "peak_hour":      peak_hour,
+            "first_track":    first_track,
+            "last_track":     last_track,
+            "unique_tracks":  unique_tracks,
+            "unique_artists": unique_artists,
+            "avg_plays":      avg_plays,
+            "vs_average":     vs_average,
+        }
+
+    return templates.TemplateResponse("time_machine.html", {
+        "request":         request,
+        "available_dates": available_dates,
+        "selected_date":   date,
+        "plays":           plays,
+        "stats":           stats,
     })
 
 
@@ -2894,7 +3026,7 @@ async def liked_songs(request: Request, db: AsyncSession = Depends(get_db)):
         "total_artists":    total_artists,
         "total_albums":     total_albums,
         "top_artists":    top_artists,
-        "all_artists":    [{"name": a, "count": c} for a, c in artist_counter.most_common()],
+        "all_artists": [{"name": a, "count": c} for a, c in artist_counter.most_common()],
         "top_albums":       top_albums,
         "top_moods":        top_moods,
         "dominant_mood":    dominant_mood,
@@ -3962,4 +4094,265 @@ async def liked_songs_graph_render_post(request: Request):
         "graph_title": "LIKED SONGS GRAPH",
         "graph_sub":   f"◈ {node_count} ARTISTS · {link_count} CONNECTIONS ◈",
         "plays_label": "liked songs",
+    })
+
+@app.get("/artist-graph-progress")
+async def artist_graph_progress(request: Request, db: AsyncSession = Depends(get_db)):
+    if "access_token" not in token_store:
+        return {"error": "not authenticated"}
+
+    from itertools import combinations
+    from fastapi.responses import StreamingResponse
+    import json
+    import time
+
+    async def generate():
+        def event(msg: str, pct: int, done: bool = False, final: str = None):
+            payload = {"msg": msg, "pct": pct, "done": done}
+            if final:
+                payload["final"] = final
+            return f"data: {json.dumps(payload)}\n\n"
+
+        yield event("Loading play history...", 5)
+
+        all_plays_q = (
+            select(TrackPlay.track_name, TrackPlay.artists, TrackPlay.album_art_url)
+            .group_by(TrackPlay.track_id)
+        )
+        all_plays = (await db.execute(all_plays_q)).fetchall()
+
+        yield event(f"Found {len(all_plays)} tracks — building connections...", 10)
+
+        connections  = defaultdict(lambda: {"count": 0, "tracks": set()})
+        artist_plays = Counter()
+
+        all_artists_q   = select(TrackPlay.artists)
+        all_artist_rows = (await db.execute(all_artists_q)).fetchall()
+        for row in all_artist_rows:
+            if row.artists:
+                for a in row.artists.split(","):
+                    a = a.strip()
+                    if a:
+                        artist_plays[a] += 1
+
+        for play in all_plays:
+            artists = [a.strip() for a in play.artists.split(",") if a.strip()]
+            if len(artists) > 1:
+                for a1, a2 in combinations(sorted(artists), 2):
+                    key = (a1, a2)
+                    connections[key]["count"]  += 1
+                    connections[key]["tracks"].add(play.track_name)
+
+        all_artists = set(artist_plays.keys())
+        total       = len(all_artists)
+
+        if not all_artists:
+            yield event("No artists found", 100, done=True)
+            return
+
+        yield event(f"Found {total} artists — fetching images...", 18)
+
+        # Build ID map [4]
+        artist_id_map = {}
+        id_table_q    = select(ArtistSpotifyID)
+        id_table_rows = (await db.execute(id_table_q)).fetchall()
+        for row in id_table_rows:
+            artist_id_map[row[0].artist_name] = row[0].spotify_id
+
+        # Fall back to track history
+        artist_id_q = (
+            select(TrackPlay.artists, TrackPlay.artist_spotify_id)
+            .where(TrackPlay.artist_spotify_id != None)
+            .group_by(TrackPlay.artists)
+        )
+        artist_id_rows = (await db.execute(artist_id_q)).fetchall()
+        for row in artist_id_rows:
+            if row.artists:
+                primary = row.artists.split(",")[0].strip()
+                if primary not in artist_id_map:
+                    artist_id_map[primary] = row.artist_spotify_id
+
+        artist_images = {}
+
+        async def save_image_to_cache(name: str, image_url: str):
+            if not image_url:
+                return
+            async with AsyncSessionLocal() as cache_db:
+                existing_q = select(ArtistCache).where(
+                    ArtistCache.artist_name == name,
+                    ArtistCache.track_name  == None,
+                ).limit(1)
+                existing = (await cache_db.execute(existing_q)).scalar_one_or_none()
+                if existing:
+                    existing.image_url = image_url
+                    await cache_db.commit()
+                else:
+                    from datetime import timedelta as td3
+                    cache_db.add(ArtistCache(
+                        artist_name = name,
+                        track_name  = None,
+                        image_url   = image_url,
+                    ))
+                    await cache_db.commit()
+
+        async def fetch_artist_image(artist_name: str):
+            from datetime import timedelta as td3
+            async with AsyncSessionLocal() as cache_db:
+                cache_q = select(ArtistCache).where(
+                    ArtistCache.artist_name == artist_name,
+                    ArtistCache.track_name  == None,
+                    ArtistCache.image_url   != None,
+                    ArtistCache.fetched_at  >= datetime.now(TIMEZONE) - td3(days=7),
+                ).limit(1)
+                cached = (await cache_db.execute(cache_q)).scalar_one_or_none()
+                if cached and cached.image_url:
+                    artist_images[artist_name] = cached.image_url
+                    return
+
+            try:
+                spotify_id = artist_id_map.get(artist_name)
+                if spotify_id:
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        resp = await client.get(
+                            f"https://api.spotify.com/v1/artists/{spotify_id}",
+                            headers={"Authorization": f"Bearer {token_store['access_token']}"},
+                        )
+                    if resp.status_code == 200:
+                        images    = resp.json().get("images", [])
+                        image_url = images[-1]["url"] if images else None
+                        artist_images[artist_name] = image_url
+                        await save_image_to_cache(artist_name, image_url)
+                        return
+                    elif resp.status_code == 429:
+                        artist_images[artist_name] = None
+                        return
+
+                encoded = urllib.parse.quote(artist_name)
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get(
+                        f"https://api.spotify.com/v1/search?q={encoded}&type=artist&limit=5",
+                        headers={"Authorization": f"Bearer {token_store['access_token']}"},
+                    )
+                if resp.status_code == 429:
+                    artist_images[artist_name] = None
+                    return
+                if resp.status_code == 200:
+                    items        = resp.json().get("artists", {}).get("items", [])
+                    artist_lower = artist_name.lower().strip()
+                    matched      = None
+                    for item in items:
+                        if item["name"].lower().strip() == artist_lower:
+                            matched = item
+                            break
+                    if matched:
+                        images    = matched.get("images", [])
+                        image_url = images[-1]["url"] if images else None
+                        artist_images[artist_name] = image_url
+                        await save_image_to_cache(artist_name, image_url)
+                        try:
+                            async with AsyncSessionLocal() as id_db:
+                                existing_q = select(ArtistSpotifyID).where(
+                                    ArtistSpotifyID.artist_name == artist_name
+                                )
+                                existing = (await id_db.execute(existing_q)).scalar_one_or_none()
+                                if not existing:
+                                    id_db.add(ArtistSpotifyID(
+                                        artist_name = artist_name,
+                                        spotify_id  = matched["id"],
+                                    ))
+                                    await id_db.commit()
+                        except Exception:
+                            pass
+                    else:
+                        artist_images[artist_name] = None
+            except Exception:
+                artist_images[artist_name] = None
+
+        known_id_artists   = [a for a in all_artists if a in artist_id_map]
+        unknown_id_artists = [a for a in all_artists if a not in artist_id_map]
+        artist_list        = known_id_artists + unknown_id_artists
+
+        batch_size  = 10
+        fetch_start = time.time()
+        processed   = 0
+
+        for i in range(0, len(artist_list), batch_size):
+            if time.time() - fetch_start > 60:
+                yield event(f"Image fetch timeout — continuing with {processed}/{len(artist_list)}", 85)
+                break
+            batch          = artist_list[i:i + batch_size]
+            is_known_batch = all(a in artist_id_map for a in batch)
+            await asyncio.gather(*[fetch_artist_image(a) for a in batch])
+            await asyncio.sleep(0.1 if is_known_batch else 0.3)
+            processed += len(batch)
+            pct = 18 + int((processed / len(artist_list)) * 67)
+            yield event(f"Fetching artist images... {processed}/{len(artist_list)}", pct)
+
+        yield event("Building nodes...", 88)
+        await asyncio.sleep(0.3)
+
+        connected_artists = set()
+        for (a1, a2) in connections:
+            connected_artists.add(a1)
+            connected_artists.add(a2)
+
+        nodes = []
+        for artist in all_artists:
+            nodes.append({
+                "id":        artist,
+                "image":     artist_images.get(artist),
+                "plays":     artist_plays.get(artist, 1),
+                "connected": artist in connected_artists,
+            })
+
+        yield event(f"Built {len(nodes)} nodes — building connections...", 93)
+        await asyncio.sleep(0.3)
+
+        links = []
+        for (a1, a2), data in connections.items():
+            seen          = set()
+            unique_tracks = []
+            for track in data["tracks"]:
+                if track.lower().strip() not in seen:
+                    seen.add(track.lower().strip())
+                    unique_tracks.append(track)
+            links.append({
+                "source": a1,
+                "target": a2,
+                "count":  len(unique_tracks),
+                "tracks": unique_tracks,
+            })
+
+        yield event(f"Built {len(links)} connections — serializing...", 97)
+        await asyncio.sleep(0.3)
+
+        graph_data = json.dumps({"nodes": nodes, "links": links})
+
+        final = json.dumps({
+            "graph_data": graph_data,
+            "node_count": len(nodes),
+            "link_count": len(links),
+        })
+        yield event("Done!", 100, done=True, final=final)
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@app.post("/artist-graph-render", response_class=HTMLResponse)
+async def artist_graph_render(request: Request):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+    import json
+    form       = await request.form()
+    graph_data = form.get("graph_data", '{"nodes":[],"links":[]}')
+    parsed     = json.loads(graph_data)
+    node_count = len(parsed.get("nodes", []))
+    link_count = len(parsed.get("links", []))
+    return templates.TemplateResponse("artist_graph.html", {
+        "request":    request,
+        "graph_data": graph_data,
+        "node_count": node_count,
+        "link_count": link_count,
+        "graph_title": "ARTIST GRAPH",
+        "graph_sub":   f"◈ {node_count} ARTISTS · {link_count} CONNECTIONS ◈",
     })
