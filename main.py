@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select, case
 from collections import defaultdict, Counter, namedtuple
+from datetime import timezone
 
 from database import init_db, AsyncSessionLocal
 from models import TrackPlay, ArtistCache, ArtistSpotifyID, LikedSong
@@ -22,8 +23,13 @@ from tracker import (
     commit_previous_track, get_or_fetch_genre, was_skipped,
     TIMEZONE
 )
-
+from fastapi.staticfiles import StaticFiles
+import os
 load_dotenv()
+
+
+
+
 
 SPOTIFY_CLIENT_ID     = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
@@ -208,6 +214,21 @@ templates = Jinja2Templates(directory="templates")
 ArtistRow     = namedtuple("ArtistRow",     ["artists", "plays"])
 ArtistSkipRow = namedtuple("ArtistSkipRow", ["artists", "skips"])
 ArtistRateRow = namedtuple("ArtistRateRow", ["artists", "plays", "skips", "skip_rate"])
+
+# Create image cache directory
+os.makedirs("artist_images", exist_ok=True)
+
+# Mount it so images are served at /artist-images/filename.jpg
+app.mount("/artist-images", StaticFiles(directory="artist_images"), name="artist_images")
+
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1424,10 +1445,9 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
     if "access_token" not in token_store:
         return RedirectResponse("/")
 
-    from datetime import timedelta
     from itertools import combinations
+    import time
 
-    # Get ALL tracks
     all_plays_q = (
         select(TrackPlay.track_name, TrackPlay.artists, TrackPlay.album_art_url)
         .group_by(TrackPlay.track_id)
@@ -1437,7 +1457,6 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
     connections  = defaultdict(lambda: {"count": 0, "tracks": set()})
     artist_plays = Counter()
 
-    # Count all plays
     all_artists_q   = select(TrackPlay.artists)
     all_artist_rows = (await db.execute(all_artists_q)).fetchall()
     for row in all_artist_rows:
@@ -1447,7 +1466,6 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
                 if a:
                     artist_plays[a] += 1
 
-    # Build connections for tracks with multiple artists
     for play in all_plays:
         artists = [a.strip() for a in play.artists.split(",") if a.strip()]
         if len(artists) > 1:
@@ -1466,17 +1484,14 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
             "link_count": 0,
         })
 
-    # Build map of artist name -> spotify ID
-    # First try the dedicated ArtistSpotifyID table
+    # Build ID map [4]
     artist_id_map = {}
-
     id_table_q    = select(ArtistSpotifyID)
     id_table_rows = (await db.execute(id_table_q)).fetchall()
     for row in id_table_rows:
         artist_id_map[row[0].artist_name] = row[0].spotify_id
 
-    # Fall back to track history for any still missing
-    artist_id_q    = (
+    artist_id_q = (
         select(TrackPlay.artists, TrackPlay.artist_spotify_id)
         .where(TrackPlay.artist_spotify_id != None)
         .group_by(TrackPlay.artists)
@@ -1488,59 +1503,63 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
             if primary not in artist_id_map:
                 artist_id_map[primary] = row.artist_spotify_id
 
-    print(f"[GRAPH] Artist ID map has {len(artist_id_map)} entries")
-
-    # Fetch artist images concurrently with caching
     artist_images = {}
 
-    async def fetch_artist_image(artist_name: str):
-        # Check cache — only use if fetched within last 7 days and has a valid URL
+    async def save_image_to_cache(name: str, image_url: str):
+        if not image_url:
+            return
+        local_path = None
+        try:
+            import hashlib
+            from datetime import timezone as _tz
+            safe_name  = hashlib.md5(name.encode()).hexdigest()
+            local_file = f"artist_images/{safe_name}.jpg"
+            if not os.path.exists(local_file):
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    img_resp = await client.get(image_url)
+                    if img_resp.status_code == 200:
+                        with open(local_file, "wb") as f:
+                            f.write(img_resp.content)
+            # Set local_path whether file was just downloaded OR already existed
+            if os.path.exists(local_file):
+                local_path         = f"/artist-images/{safe_name}.jpg"
+                artist_images[name] = local_path  # assign immediately to in-memory dict
+        except Exception as e:
+            print(f"[CACHE] Failed to download image for {name}: {e}")
+
         async with AsyncSessionLocal() as cache_db:
-            cache_q = select(ArtistCache).where(
-                ArtistCache.artist_name == artist_name,
+            existing_q = select(ArtistCache).where(
+                ArtistCache.artist_name == name,
                 ArtistCache.track_name  == None,
-                ArtistCache.image_url   != None,
-                ArtistCache.fetched_at  >= datetime.now(TIMEZONE) - timedelta(days=7),
             ).limit(1)
-            cached = (await cache_db.execute(cache_q)).scalar_one_or_none()
-            if cached and cached.image_url:
-                artist_images[artist_name] = cached.image_url
-                return
+            existing = (await cache_db.execute(existing_q)).scalar_one_or_none()
+            if existing:
+                existing.image_url   = image_url
+                existing.local_image = local_path
+                existing.fetched_at  = datetime.now(timezone.utc)
+                await cache_db.commit()
+            else:
+                cache_db.add(ArtistCache(
+                    artist_name = name,
+                    track_name  = None,
+                    image_url   = image_url,
+                    local_image = local_path,
+                    fetched_at  = datetime.now(timezone.utc),
+                ))
+                await cache_db.commit()
 
-        async def save_image_to_cache(name: str, image_url: str):
-            if not image_url:
-                return
-            async with AsyncSessionLocal() as cache_db:
-                existing_q = select(ArtistCache).where(
-                    ArtistCache.artist_name == name,
-                    ArtistCache.track_name  == None,
-                ).limit(1)
-                existing = (await cache_db.execute(existing_q)).scalar_one_or_none()
-                if existing:
-                    existing.image_url = image_url
-                    await cache_db.commit()
-                else:
-                    entry = ArtistCache(
-                        artist_name = name,
-                        track_name  = None,
-                        image_url   = image_url,
-                    )
-                    cache_db.add(entry)
-                    await cache_db.commit()
-
+    async def fetch_artist_image(artist_name: str):
+        # Only called for uncached artists — no DB check, go straight to Spotify
         try:
             spotify_id = artist_id_map.get(artist_name)
-
             if spotify_id:
-                # Use direct artist ID lookup — guaranteed correct
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     resp = await client.get(
                         f"https://api.spotify.com/v1/artists/{spotify_id}",
                         headers={"Authorization": f"Bearer {token_store['access_token']}"},
                     )
                 if resp.status_code == 200:
-                    data      = resp.json()
-                    images    = data.get("images", [])
+                    images    = resp.json().get("images", [])
                     image_url = images[-1]["url"] if images else None
                     artist_images[artist_name] = image_url
                     await save_image_to_cache(artist_name, image_url)
@@ -1549,34 +1568,28 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
                     artist_images[artist_name] = None
                     return
 
-            # No stored ID — fall back to strict exact name search only
             encoded = urllib.parse.quote(artist_name)
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(
                     f"https://api.spotify.com/v1/search?q={encoded}&type=artist&limit=5",
                     headers={"Authorization": f"Bearer {token_store['access_token']}"},
                 )
-
             if resp.status_code == 429:
                 artist_images[artist_name] = None
                 return
-
             if resp.status_code == 200:
                 items        = resp.json().get("artists", {}).get("items", [])
                 artist_lower = artist_name.lower().strip()
                 matched      = None
-
                 for item in items:
                     if item["name"].lower().strip() == artist_lower:
                         matched = item
                         break
-
                 if matched:
                     images    = matched.get("images", [])
                     image_url = images[-1]["url"] if images else None
                     artist_images[artist_name] = image_url
                     await save_image_to_cache(artist_name, image_url)
-                    # Also store the Spotify ID for future use
                     try:
                         async with AsyncSessionLocal() as id_db:
                             existing_q = select(ArtistSpotifyID).where(
@@ -1593,27 +1606,56 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
                         pass
                 else:
                     artist_images[artist_name] = None
-
         except Exception:
             artist_images[artist_name] = None
 
-    # Prioritize artists that have a known Spotify ID — they load fastest
-    # and are guaranteed correct. Put those first, unknown ones after.
-    known_id_artists   = [a for a in all_artists if a in artist_id_map]
-    unknown_id_artists = [a for a in all_artists if a not in artist_id_map]
+    artist_list = (
+        [a for a in all_artists if a in artist_id_map] +
+        [a for a in all_artists if a not in artist_id_map]
+    )
 
-    # Process known ID artists first with larger batches since they're fast
-    artist_list = known_id_artists + unknown_id_artists
+    # Single bulk query — no per-artist DB sessions [3]
+    async with AsyncSessionLocal() as cache_db:
+        all_cache_q = select(ArtistCache).where(
+            ArtistCache.track_name == None,
+            ArtistCache.image_url  != None,
+        )
+        all_cache_rows = (await cache_db.execute(all_cache_q)).scalars().fetchall()
 
-    batch_size = 10
-    for i in range(0, len(artist_list), batch_size):
-        batch = artist_list[i:i + batch_size]
-        # Use smaller delay for known ID artists, larger for search fallback
+    cache_map        = {row.artist_name: row for row in all_cache_rows}
+    cached_artists   = []
+    uncached_artists = []
+
+    for artist in artist_list:
+        row = cache_map.get(artist)
+        if row and row.local_image:
+            # Convert stored "/artist-images/x.jpg" → "artist_images/x.jpg"
+            local_disk_path = row.local_image.lstrip("/").replace("artist-images/", "artist_images/", 1)
+            if os.path.exists(local_disk_path):
+                cached_artists.append(artist)
+                continue
+        uncached_artists.append(artist)
+
+    # Read cached directly from cache_map — zero DB or network calls
+    # Process cached directly from cache_map — zero DB or network calls
+    for artist in cached_artists:
+        row = cache_map.get(artist)
+        if row and row.local_image:
+            local_disk_path = row.local_image.lstrip("/").replace("artist-images/", "artist_images/", 1)
+            if os.path.exists(local_disk_path):
+                artist_images[artist] = row.local_image
+
+    # Only uncached go through fetch_artist_image
+    fetch_start = time.time()
+    for i in range(0, len(uncached_artists), 10):
+        if time.time() - fetch_start > 240:
+            print(f"[GRAPH] Image fetch timeout at {i}/{len(uncached_artists)}")
+            break
+        batch          = uncached_artists[i:i + 10]
         is_known_batch = all(a in artist_id_map for a in batch)
         await asyncio.gather(*[fetch_artist_image(a) for a in batch])
-        await asyncio.sleep(0.1 if is_known_batch else 0.3)
+        await asyncio.sleep(0.2 if is_known_batch else 0.5)
 
-    # Build nodes
     connected_artists = set()
     for (a1, a2) in connections:
         connected_artists.add(a1)
@@ -1628,16 +1670,13 @@ async def artist_graph(request: Request, db: AsyncSession = Depends(get_db)):
             "connected": artist in connected_artists,
         })
 
-    # Build links
- # Build links — deduplicate track names within each connection
     links = []
     for (a1, a2), data in connections.items():
-        # Deduplicate track names case-insensitively
-        seen_tracks  = set()
+        seen          = set()
         unique_tracks = []
         for track in data["tracks"]:
-            if track.lower().strip() not in seen_tracks:
-                seen_tracks.add(track.lower().strip())
+            if track.lower().strip() not in seen:
+                seen.add(track.lower().strip())
                 unique_tracks.append(track)
         links.append({
             "source": a1,
@@ -3062,6 +3101,7 @@ async def liked_songs_graph(request: Request, db: AsyncSession = Depends(get_db)
 
     from itertools import combinations
     from datetime import timedelta as td2
+    import time
 
     all_q     = select(LikedSong).order_by(LikedSong.added_at.asc())
     all_songs = (await db.execute(all_q)).scalars().fetchall()
@@ -3092,26 +3132,13 @@ async def liked_songs_graph(request: Request, db: AsyncSession = Depends(get_db)
                 connections[key]["count"]  += 1
                 connections[key]["tracks"].add(song.track_name)
 
-    # Only include artists that have connections OR appear on 3+ liked songs
-    # connected_artists_set = set()
-    # for (a1, a2) in connections:
-    #     connected_artists_set.add(a1)
-    #     connected_artists_set.add(a2)
-
-    # all_artists = {
-    #     a for a in artist_count
-    #     if a in connected_artists_set or artist_count[a] >= 3
-    # }
-
-    # Include all artists from liked songs
     connected_artists_set = set()
     for (a1, a2) in connections:
         connected_artists_set.add(a1)
         connected_artists_set.add(a2)
 
+    # Include ALL artists from liked songs [3]
     all_artists = set(artist_count.keys())
-
-    print(f"[LIKED GRAPH] Filtered from {len(artist_count)} to {len(all_artists)} artists")
 
     if not all_artists:
         return templates.TemplateResponse("artist_graph.html", {
@@ -3124,7 +3151,7 @@ async def liked_songs_graph(request: Request, db: AsyncSession = Depends(get_db)
             "plays_label": "liked songs",
         })
 
-    # Build ID map from ArtistSpotifyID table
+    # Build ID map [4]
     artist_id_map = {}
     id_table_q    = select(ArtistSpotifyID)
     id_table_rows = (await db.execute(id_table_q)).fetchall()
@@ -3133,45 +3160,53 @@ async def liked_songs_graph(request: Request, db: AsyncSession = Depends(get_db)
 
     artist_images = {}
 
-    async def fetch_artist_image(artist_name: str):
-        # Check cache first
+    async def save_cache(name: str, image_url: str):
+        if not image_url:
+            return
+        local_path = None
+        try:
+            import hashlib
+            from datetime import timezone as _tz
+            safe_name  = hashlib.md5(name.encode()).hexdigest()
+            local_file = f"artist_images/{safe_name}.jpg"
+            if not os.path.exists(local_file):
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    img_resp = await client.get(image_url)
+                    if img_resp.status_code == 200:
+                        with open(local_file, "wb") as f:
+                            f.write(img_resp.content)
+            # Set local_path whether file was just downloaded OR already existed
+            if os.path.exists(local_file):
+                local_path = f"/artist-images/{safe_name}.jpg"
+        except Exception as e:
+            print(f"[CACHE] Failed to download image for {name}: {e}")
+
         async with AsyncSessionLocal() as cache_db:
-            cache_q = select(ArtistCache).where(
-                ArtistCache.artist_name == artist_name,
+            existing_q = select(ArtistCache).where(
+                ArtistCache.artist_name == name,
                 ArtistCache.track_name  == None,
-                ArtistCache.image_url   != None,
-                ArtistCache.fetched_at  >= datetime.now(TIMEZONE) - td2(days=7),
             ).limit(1)
-            cached = (await cache_db.execute(cache_q)).scalar_one_or_none()
-            if cached and cached.image_url:
-                artist_images[artist_name] = cached.image_url
-                return
+            existing = (await cache_db.execute(existing_q)).scalar_one_or_none()
+            if existing:
+                existing.image_url   = image_url
+                existing.local_image = local_path
+                existing.fetched_at  = datetime.now(timezone.utc)
+                await cache_db.commit()
+            else:
+                cache_db.add(ArtistCache(
+                    artist_name = name,
+                    track_name  = None,
+                    image_url   = image_url,
+                    local_image = local_path,
+                    fetched_at  = datetime.now(timezone.utc),
+                ))
+                await cache_db.commit()
 
-        async def save_cache(name: str, image_url: str):
-            if not image_url:
-                return
-            async with AsyncSessionLocal() as cache_db:
-                existing_q = select(ArtistCache).where(
-                    ArtistCache.artist_name == name,
-                    ArtistCache.track_name  == None,
-                ).limit(1)
-                existing = (await cache_db.execute(existing_q)).scalar_one_or_none()
-                if existing:
-                    existing.image_url = image_url
-                    await cache_db.commit()
-                else:
-                    cache_db.add(ArtistCache(
-                        artist_name = name,
-                        track_name  = None,
-                        image_url   = image_url,
-                    ))
-                    await cache_db.commit()
-
+    async def fetch_artist_image(artist_name: str):
+        # Only called for uncached artists — no DB check, go straight to Spotify
         try:
             spotify_id = artist_id_map.get(artist_name)
-
             if spotify_id:
-                # Direct ID lookup — fastest and most accurate
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     resp = await client.get(
                         f"https://api.spotify.com/v1/artists/{spotify_id}",
@@ -3187,35 +3222,28 @@ async def liked_songs_graph(request: Request, db: AsyncSession = Depends(get_db)
                     artist_images[artist_name] = None
                     return
 
-            # Fall back to search — exact name match only
             encoded = urllib.parse.quote(artist_name)
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(
                     f"https://api.spotify.com/v1/search?q={encoded}&type=artist&limit=5",
                     headers={"Authorization": f"Bearer {token_store['access_token']}"},
                 )
-
             if resp.status_code == 429:
                 artist_images[artist_name] = None
                 return
-
             if resp.status_code == 200:
                 items        = resp.json().get("artists", {}).get("items", [])
                 artist_lower = artist_name.lower().strip()
                 matched      = None
-
                 for item in items:
                     if item["name"].lower().strip() == artist_lower:
                         matched = item
                         break
-
                 if matched:
                     images    = matched.get("images", [])
                     image_url = images[-1]["url"] if images else None
                     artist_images[artist_name] = image_url
                     await save_cache(artist_name, image_url)
-
-                    # Store Spotify ID for future use
                     try:
                         async with AsyncSessionLocal() as id_db:
                             existing_q = select(ArtistSpotifyID).where(
@@ -3232,23 +3260,56 @@ async def liked_songs_graph(request: Request, db: AsyncSession = Depends(get_db)
                         pass
                 else:
                     artist_images[artist_name] = None
-
         except Exception:
             artist_images[artist_name] = None
 
-    # Process in batches — known IDs first since they're faster
-    known_id_artists   = [a for a in all_artists if a in artist_id_map]
-    unknown_id_artists = [a for a in all_artists if a not in artist_id_map]
-    artist_list        = known_id_artists + unknown_id_artists
+    artist_list = (
+        [a for a in all_artists if a in artist_id_map] +
+        [a for a in all_artists if a not in artist_id_map]
+    )
 
-    batch_size = 5
-    for i in range(0, len(artist_list), batch_size):
-        batch          = artist_list[i:i + batch_size]
+    # Single bulk query — no per-artist DB sessions [3]
+    async with AsyncSessionLocal() as cache_db:
+        all_cache_q = select(ArtistCache).where(
+            ArtistCache.track_name == None,
+            ArtistCache.image_url  != None,
+        )
+        all_cache_rows = (await cache_db.execute(all_cache_q)).scalars().fetchall()
+
+    cache_map        = {row.artist_name: row for row in all_cache_rows}
+    cached_artists   = []
+    uncached_artists = []
+
+    for artist in artist_list:
+        row = cache_map.get(artist)
+        if row and row.local_image:
+            # Convert stored "/artist-images/x.jpg" → "artist_images/x.jpg"
+            local_disk_path = row.local_image.lstrip("/").replace("artist-images/", "artist_images/", 1)
+            if os.path.exists(local_disk_path):
+                cached_artists.append(artist)
+                continue
+        uncached_artists.append(artist)
+
+    # Read cached directly from cache_map — zero DB or network calls
+    # Process cached directly from cache_map — zero DB or network calls
+    for artist in cached_artists:
+        row = cache_map.get(artist)
+        if row and row.local_image:
+            local_disk_path = row.local_image.lstrip("/").replace("artist-images/", "artist_images/", 1)
+            if os.path.exists(local_disk_path):
+                artist_images[artist] = row.local_image
+
+    # Only uncached go through fetch_artist_image
+    fetch_start = time.time()
+    for i in range(0, len(uncached_artists), 5):
+        if time.time() - fetch_start > 240:
+            print(f"[LIKED GRAPH] Timeout at {i}/{len(uncached_artists)}")
+            break
+        batch          = uncached_artists[i:i + 5]
         is_known_batch = all(a in artist_id_map for a in batch)
         await asyncio.gather(*[fetch_artist_image(a) for a in batch])
-        await asyncio.sleep(0.1 if is_known_batch else 0.3)
+        await asyncio.sleep(0.2 if is_known_batch else 0.5)
 
-    # Build nodes — only for filtered artists
     nodes = []
     for artist in all_artists:
         nodes.append({
@@ -3258,7 +3319,6 @@ async def liked_songs_graph(request: Request, db: AsyncSession = Depends(get_db)
             "connected": artist in connected_artists_set,
         })
 
-    # Build links — only for connections between included artists
     links = []
     for (a1, a2), data in connections.items():
         if a1 not in all_artists or a2 not in all_artists:
@@ -3288,6 +3348,7 @@ async def liked_songs_graph(request: Request, db: AsyncSession = Depends(get_db)
         "graph_sub":   f"◈ {len(nodes)} ARTISTS · {len(links)} CONNECTIONS ◈",
         "plays_label": "liked songs",
     })
+
 
 @app.get("/liked-separation")
 async def liked_separation(a1: str, a2: str, db: AsyncSession = Depends(get_db)):
@@ -3902,9 +3963,8 @@ async def liked_songs_graph_progress(request: Request, db: AsyncSession = Depend
         all_artists = set(artist_count.keys())
         total       = len(all_artists)
 
-        yield event(f"Found {total} artists — fetching images...", 18)
+        yield event(f"Found {total} artists — checking cache...", 15)
 
-        # Build ID map from ArtistSpotifyID table [4]
         artist_id_map = {}
         id_table_q    = select(ArtistSpotifyID)
         id_table_rows = (await db.execute(id_table_q)).fetchall()
@@ -3916,6 +3976,24 @@ async def liked_songs_graph_progress(request: Request, db: AsyncSession = Depend
         async def save_cache(name: str, image_url: str):
             if not image_url:
                 return
+            local_path = None
+            try:
+                import hashlib
+                from datetime import timezone as _tz
+                safe_name  = hashlib.md5(name.encode()).hexdigest()
+                local_file = f"artist_images/{safe_name}.jpg"
+                if not os.path.exists(local_file):
+                    async with httpx.AsyncClient(timeout=8.0) as client:
+                        img_resp = await client.get(image_url)
+                        if img_resp.status_code == 200:
+                            with open(local_file, "wb") as f:
+                                f.write(img_resp.content)
+                # Set local_path whether file was just downloaded OR already existed
+                if os.path.exists(local_file):
+                    local_path = f"/artist-images/{safe_name}.jpg"
+            except Exception as e:
+                print(f"[CACHE] Failed to download image for {name}: {e}")
+
             async with AsyncSessionLocal() as cache_db:
                 existing_q = select(ArtistCache).where(
                     ArtistCache.artist_name == name,
@@ -3923,30 +4001,22 @@ async def liked_songs_graph_progress(request: Request, db: AsyncSession = Depend
                 ).limit(1)
                 existing = (await cache_db.execute(existing_q)).scalar_one_or_none()
                 if existing:
-                    existing.image_url = image_url
+                    existing.image_url   = image_url
+                    existing.local_image = local_path
+                    existing.fetched_at  = datetime.now(timezone.utc)
                     await cache_db.commit()
                 else:
                     cache_db.add(ArtistCache(
                         artist_name = name,
                         track_name  = None,
                         image_url   = image_url,
+                        local_image = local_path,
+                        fetched_at  = datetime.now(timezone.utc),
                     ))
                     await cache_db.commit()
 
         async def fetch_artist_image(artist_name: str):
-            # Check cache first [4]
-            async with AsyncSessionLocal() as cache_db:
-                cache_q = select(ArtistCache).where(
-                    ArtistCache.artist_name == artist_name,
-                    ArtistCache.track_name  == None,
-                    ArtistCache.image_url   != None,
-                    ArtistCache.fetched_at  >= datetime.now(TIMEZONE) - td2(days=7),
-                ).limit(1)
-                cached = (await cache_db.execute(cache_q)).scalar_one_or_none()
-                if cached and cached.image_url:
-                    artist_images[artist_name] = cached.image_url
-                    return
-
+            # Only called for uncached artists — no DB check needed here
             try:
                 spotify_id = artist_id_map.get(artist_name)
                 if spotify_id:
@@ -4006,27 +4076,65 @@ async def liked_songs_graph_progress(request: Request, db: AsyncSession = Depend
             except Exception:
                 artist_images[artist_name] = None
 
-        # Known IDs first — they are faster [3]
-        known_id_artists   = [a for a in all_artists if a in artist_id_map]
-        unknown_id_artists = [a for a in all_artists if a not in artist_id_map]
-        artist_list        = known_id_artists + unknown_id_artists[:50]
+        artist_list = (
+            [a for a in all_artists if a in artist_id_map] +
+            [a for a in all_artists if a not in artist_id_map]
+        )
 
+        # Single bulk query [3]
+        async with AsyncSessionLocal() as cache_db:
+            all_cache_q = select(ArtistCache).where(
+                ArtistCache.track_name == None,
+                ArtistCache.image_url  != None,
+            )
+            all_cache_rows = (await cache_db.execute(all_cache_q)).scalars().fetchall()
+
+        cache_map        = {row.artist_name: row for row in all_cache_rows}
+        cached_artists   = []
+        uncached_artists = []
+
+        for artist in artist_list:
+            row = cache_map.get(artist)
+            if row and row.local_image:
+                # Convert stored "/artist-images/x.jpg" → "artist_images/x.jpg"
+                local_disk_path = row.local_image.lstrip("/").replace("artist-images/", "artist_images/", 1)
+                if os.path.exists(local_disk_path):
+                    cached_artists.append(artist)
+                    continue
+            uncached_artists.append(artist)
+
+        yield event(f"Found {len(cached_artists)} cached · {len(uncached_artists)} to fetch...", 18)
+
+        processed = 0
+
+        # Process cached directly from cache_map — zero DB or network calls
+   # Process cached directly from cache_map — zero DB or network calls
+        for artist in cached_artists:
+            row = cache_map.get(artist)
+            if row and row.local_image:
+                local_disk_path = row.local_image.lstrip("/").replace("artist-images/", "artist_images/", 1)
+                if os.path.exists(local_disk_path):
+                    artist_images[artist] = row.local_image
+
+
+                
+        processed = len(cached_artists)
+        pct = 18 + int((processed / max(len(artist_list), 1)) * 67)
+        yield event(f"Loaded {len(cached_artists)} cached images", pct)
+
+        # Process uncached with timeout
         batch_size  = 5
         fetch_start = time.time()
-        processed   = 0
-
-        for i in range(0, len(artist_list), batch_size):
-            # Hard stop after 60 seconds for large libraries [3]
-            if time.time() - fetch_start > 60:
-                yield event(f"Image fetch timeout — continuing with {processed}/{len(artist_list)}", 85)
+        for i in range(0, len(uncached_artists), batch_size):
+            if time.time() - fetch_start > 240:
+                yield event(f"Network timeout — {len(uncached_artists) - i} artists will load on next visit", 85)
                 break
-            batch          = artist_list[i:i + batch_size]
+            batch          = uncached_artists[i:i + batch_size]
             is_known_batch = all(a in artist_id_map for a in batch)
             await asyncio.gather(*[fetch_artist_image(a) for a in batch])
-            await asyncio.sleep(0.1 if is_known_batch else 0.3)
+            await asyncio.sleep(0.2 if is_known_batch else 0.5)
             processed += len(batch)
-            # Image fetching runs from 18% to 85%
-            pct = 18 + int((processed / len(artist_list)) * 67)
+            pct = 18 + int((processed / max(len(artist_list), 1)) * 67)
             yield event(f"Fetching artist images... {processed}/{len(artist_list)}", pct)
 
         yield event("Building nodes...", 88)
@@ -4066,7 +4174,6 @@ async def liked_songs_graph_progress(request: Request, db: AsyncSession = Depend
 
         graph_data = json.dumps({"nodes": nodes, "links": links})
 
-        # Only emit 100% and final data after everything is genuinely ready [3]
         final = json.dumps({
             "graph_data": graph_data,
             "node_count": len(nodes),
@@ -4076,25 +4183,8 @@ async def liked_songs_graph_progress(request: Request, db: AsyncSession = Depend
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
-@app.post("/liked-songs-graph-render", response_class=HTMLResponse)
-async def liked_songs_graph_render_post(request: Request):
-    if "access_token" not in token_store:
-        return RedirectResponse("/")
-    import json
-    form       = await request.form()
-    graph_data = form.get("graph_data", '{"nodes":[],"links":[]}')
-    parsed     = json.loads(graph_data)
-    node_count = len(parsed.get("nodes", []))
-    link_count = len(parsed.get("links", []))
-    return templates.TemplateResponse("artist_graph.html", {
-        "request":     request,
-        "graph_data":  graph_data,
-        "node_count":  node_count,
-        "link_count":  link_count,
-        "graph_title": "LIKED SONGS GRAPH",
-        "graph_sub":   f"◈ {node_count} ARTISTS · {link_count} CONNECTIONS ◈",
-        "plays_label": "liked songs",
-    })
+
+
 
 @app.get("/artist-graph-progress")
 async def artist_graph_progress(request: Request, db: AsyncSession = Depends(get_db)):
@@ -4150,16 +4240,14 @@ async def artist_graph_progress(request: Request, db: AsyncSession = Depends(get
             yield event("No artists found", 100, done=True)
             return
 
-        yield event(f"Found {total} artists — fetching images...", 18)
+        yield event(f"Found {total} artists — checking cache...", 15)
 
-        # Build ID map [4]
         artist_id_map = {}
         id_table_q    = select(ArtistSpotifyID)
         id_table_rows = (await db.execute(id_table_q)).fetchall()
         for row in id_table_rows:
             artist_id_map[row[0].artist_name] = row[0].spotify_id
 
-        # Fall back to track history
         artist_id_q = (
             select(TrackPlay.artists, TrackPlay.artist_spotify_id)
             .where(TrackPlay.artist_spotify_id != None)
@@ -4177,6 +4265,25 @@ async def artist_graph_progress(request: Request, db: AsyncSession = Depends(get
         async def save_image_to_cache(name: str, image_url: str):
             if not image_url:
                 return
+            local_path = None
+            try:
+                import hashlib
+                from datetime import timezone as _tz
+                safe_name  = hashlib.md5(name.encode()).hexdigest()
+                local_file = f"artist_images/{safe_name}.jpg"
+                if not os.path.exists(local_file):
+                    async with httpx.AsyncClient(timeout=8.0) as client:
+                        img_resp = await client.get(image_url)
+                        if img_resp.status_code == 200:
+                            with open(local_file, "wb") as f:
+                                f.write(img_resp.content)
+                # Set local_path whether file was just downloaded OR already existed
+                if os.path.exists(local_file):
+                    local_path         = f"/artist-images/{safe_name}.jpg"
+                    artist_images[name] = local_path  # assign immediately to in-memory dict
+            except Exception as e:
+                print(f"[CACHE] Failed to download image for {name}: {e}")
+
             async with AsyncSessionLocal() as cache_db:
                 existing_q = select(ArtistCache).where(
                     ArtistCache.artist_name == name,
@@ -4184,31 +4291,24 @@ async def artist_graph_progress(request: Request, db: AsyncSession = Depends(get
                 ).limit(1)
                 existing = (await cache_db.execute(existing_q)).scalar_one_or_none()
                 if existing:
-                    existing.image_url = image_url
+                    existing.image_url   = image_url
+                    existing.local_image = local_path
+                    existing.fetched_at  = datetime.now(timezone.utc)
                     await cache_db.commit()
                 else:
-                    from datetime import timedelta as td3
                     cache_db.add(ArtistCache(
                         artist_name = name,
                         track_name  = None,
                         image_url   = image_url,
+                        local_image = local_path,
+                        fetched_at  = datetime.now(timezone.utc),
                     ))
                     await cache_db.commit()
 
-        async def fetch_artist_image(artist_name: str):
-            from datetime import timedelta as td3
-            async with AsyncSessionLocal() as cache_db:
-                cache_q = select(ArtistCache).where(
-                    ArtistCache.artist_name == artist_name,
-                    ArtistCache.track_name  == None,
-                    ArtistCache.image_url   != None,
-                    ArtistCache.fetched_at  >= datetime.now(TIMEZONE) - td3(days=7),
-                ).limit(1)
-                cached = (await cache_db.execute(cache_q)).scalar_one_or_none()
-                if cached and cached.image_url:
-                    artist_images[artist_name] = cached.image_url
-                    return
 
+
+        async def fetch_artist_image(artist_name: str):
+            # Only called for uncached artists — no DB check needed here
             try:
                 spotify_id = artist_id_map.get(artist_name)
                 if spotify_id:
@@ -4268,24 +4368,75 @@ async def artist_graph_progress(request: Request, db: AsyncSession = Depends(get
             except Exception:
                 artist_images[artist_name] = None
 
-        known_id_artists   = [a for a in all_artists if a in artist_id_map]
-        unknown_id_artists = [a for a in all_artists if a not in artist_id_map]
-        artist_list        = known_id_artists + unknown_id_artists
+        artist_list = (
+            [a for a in all_artists if a in artist_id_map] +
+            [a for a in all_artists if a not in artist_id_map]
+        )
 
+        # Single bulk query [3]
+        async with AsyncSessionLocal() as cache_db:
+            all_cache_q = select(ArtistCache).where(
+                ArtistCache.track_name == None,
+                ArtistCache.image_url  != None,
+            )
+            all_cache_rows = (await cache_db.execute(all_cache_q)).scalars().fetchall()
+
+        cache_map        = {row.artist_name: row for row in all_cache_rows}
+        cached_artists   = []
+        uncached_artists = []
+
+
+        for artist in artist_list:
+            row = cache_map.get(artist)
+            if row and row.local_image:
+                # Convert stored "/artist-images/x.jpg" → "artist_images/x.jpg"
+                local_disk_path = row.local_image.lstrip("/").replace("artist-images/", "artist_images/", 1)
+                if os.path.exists(local_disk_path):
+                    cached_artists.append(artist)
+                    continue
+            uncached_artists.append(artist)
+
+
+            # if row and row.local_image and os.path.exists(new_path):
+            #     cached_artists.append(artist)
+            # else:
+            #     uncached_artists.append(artist)
+
+        # print(uncached_artists)
+        # print(cached_artists)
+
+        yield event(f"Found {len(cached_artists)} cached · {len(uncached_artists)} to fetch...", 18)
+
+        processed = 0
+
+        # Process cached directly from cache_map — zero DB or network calls
+        # Process cached directly from cache_map — zero DB or network calls
+        for artist in cached_artists:
+            row = cache_map.get(artist)
+            if row and row.local_image:
+                local_disk_path = row.local_image.lstrip("/").replace("artist-images/", "artist_images/", 1)
+                if os.path.exists(local_disk_path):
+                    artist_images[artist] = row.local_image
+
+
+
+        processed = len(cached_artists)
+        pct = 18 + int((processed / max(len(artist_list), 1)) * 67)
+        yield event(f"Loaded {len(cached_artists)} cached images", pct)
+
+        # Process uncached with timeout
         batch_size  = 10
         fetch_start = time.time()
-        processed   = 0
-
-        for i in range(0, len(artist_list), batch_size):
-            if time.time() - fetch_start > 60:
-                yield event(f"Image fetch timeout — continuing with {processed}/{len(artist_list)}", 85)
+        for i in range(0, len(uncached_artists), batch_size):
+            if time.time() - fetch_start > 240:
+                yield event(f"Network timeout — {len(uncached_artists) - i} artists will load on next visit", 85)
                 break
-            batch          = artist_list[i:i + batch_size]
+            batch          = uncached_artists[i:i + batch_size]
             is_known_batch = all(a in artist_id_map for a in batch)
             await asyncio.gather(*[fetch_artist_image(a) for a in batch])
-            await asyncio.sleep(0.1 if is_known_batch else 0.3)
+            await asyncio.sleep(0.2 if is_known_batch else 0.5)
             processed += len(batch)
-            pct = 18 + int((processed / len(artist_list)) * 67)
+            pct = 18 + int((processed / max(len(artist_list), 1)) * 67)
             yield event(f"Fetching artist images... {processed}/{len(artist_list)}", pct)
 
         yield event("Building nodes...", 88)
@@ -4338,6 +4489,8 @@ async def artist_graph_progress(request: Request, db: AsyncSession = Depends(get
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
+
+
 @app.post("/artist-graph-render", response_class=HTMLResponse)
 async def artist_graph_render(request: Request):
     if "access_token" not in token_store:
@@ -4349,10 +4502,99 @@ async def artist_graph_render(request: Request):
     node_count = len(parsed.get("nodes", []))
     link_count = len(parsed.get("links", []))
     return templates.TemplateResponse("artist_graph.html", {
-        "request":    request,
-        "graph_data": graph_data,
-        "node_count": node_count,
-        "link_count": link_count,
+        "request":     request,
+        "graph_data":  graph_data,
+        "node_count":  node_count,
+        "link_count":  link_count,
         "graph_title": "ARTIST GRAPH",
         "graph_sub":   f"◈ {node_count} ARTISTS · {link_count} CONNECTIONS ◈",
     })
+
+
+@app.post("/liked-songs-graph-render", response_class=HTMLResponse)
+async def liked_songs_graph_render(request: Request):
+    if "access_token" not in token_store:
+        return RedirectResponse("/")
+    import json
+    form       = await request.form()
+    graph_data = form.get("graph_data", '{"nodes":[],"links":[]}')
+    parsed     = json.loads(graph_data)
+    node_count = len(parsed.get("nodes", []))
+    link_count = len(parsed.get("links", []))
+    return templates.TemplateResponse("artist_graph.html", {
+        "request":     request,
+        "graph_data":  graph_data,
+        "node_count":  node_count,
+        "link_count":  link_count,
+        "graph_title": "LIKED SONGS GRAPH",
+        "graph_sub":   f"◈ {node_count} ARTISTS · {link_count} CONNECTIONS ◈",
+        "plays_label": "liked songs",
+    })
+
+@app.get("/backfill-local-images")
+async def backfill_local_images(db: AsyncSession = Depends(get_db)):
+    import hashlib
+
+    missing_q = select(ArtistCache).where(
+        ArtistCache.track_name  == None,
+        ArtistCache.image_url   != None,
+        ArtistCache.local_image == None,
+    )
+    missing = (await db.execute(missing_q)).scalars().fetchall()
+    print(f"[BACKFILL] {len(missing)} artists need local image download")
+
+    downloaded = 0
+    failed     = 0
+
+    for row in missing:
+        try:
+            safe_name  = hashlib.md5(row.artist_name.encode()).hexdigest()
+            local_file = f"artist_images/{safe_name}.jpg"
+            if not os.path.exists(local_file):
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    img_resp = await client.get(row.image_url)
+                if img_resp.status_code == 200:
+                    with open(local_file, "wb") as f:
+                        f.write(img_resp.content)
+                else:
+                    failed += 1
+                    continue
+            row.local_image = f"/artist-images/{safe_name}.jpg"
+            downloaded += 1
+        except Exception as e:
+            print(f"[BACKFILL] Failed for {row.artist_name}: {e}")
+            failed += 1
+
+    await db.commit()
+    return {
+        "total":      len(missing),
+        "downloaded": downloaded,
+        "failed":     failed,
+    }
+
+@app.post("/refresh-artist-image")
+async def refresh_artist_image(request: Request, db: AsyncSession = Depends(get_db)):
+    import hashlib
+    form        = await request.form()
+    artist_name = form.get("artist_name", "").strip()
+    if not artist_name:
+        return {"error": "no artist name"}
+
+    # Delete local file
+    safe_name  = hashlib.md5(artist_name.encode()).hexdigest()
+    local_file = f"artist_images/{safe_name}.jpg"
+    if os.path.exists(local_file):
+        os.remove(local_file)
+
+    # Nullify DB cache so it gets re-fetched on next graph load
+    cache_q = select(ArtistCache).where(
+        ArtistCache.artist_name == artist_name,
+        ArtistCache.track_name  == None,
+    )
+    rows = (await db.execute(cache_q)).scalars().fetchall()
+    for row in rows:
+        row.local_image = None
+        row.fetched_at  = None
+    await db.commit()
+
+    return {"ok": True, "artist": artist_name}

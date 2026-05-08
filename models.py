@@ -34,6 +34,7 @@ class ArtistCache(Base):
     track_name  = Column(String, nullable=True)
     genres      = Column(String, nullable=True)
     image_url   = Column(String, nullable=True)
+    local_image = Column(String, nullable=True)  # ← path to local file
     fetched_at  = Column(DateTime, server_default=func.now())
 
 class ArtistSpotifyID(Base):

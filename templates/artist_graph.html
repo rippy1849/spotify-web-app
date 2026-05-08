@@ -269,10 +269,14 @@ const playsLabel = {{ (plays_label | default("plays")) | tojson }};
         // ── Texture loader ────────────────────────────────────────────────────
         const textureLoader = new THREE.TextureLoader(), textureCache = {};
         function loadTexture(url, cb) {
-            if (textureCache[url]) { cb(textureCache[url]); return; }
-            textureLoader.load(url, tex => { textureCache[url] = tex; cb(tex); }, undefined, () => cb(null));
-        }
-
+    if (textureCache[url]) { cb(textureCache[url]); return; }
+    const loader = new THREE.TextureLoader();
+    loader.crossOrigin = 'anonymous';
+    loader.load(url, tex => { textureCache[url] = tex; cb(tex); }, undefined, () => cb(null));
+}
+graphData.nodes.forEach(n => {
+    if (n.image) console.log('[IMAGE]', n.id, n.image);
+});
         // ── Node meshes ───────────────────────────────────────────────────────
         const nodeMeshes = [], nodeGlows = [], nodeIndexMap = {};
         graphData.nodes.forEach((node, i) => {

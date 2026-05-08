@@ -313,6 +313,9 @@
             {% else %}
             <div class="ah-ph">🎤</div>
             {% endif %}
+
+            
+
             <div class="ah-info">
                 <div class="ah-name">{{ artist_name }}</div>
                 {% if top_genres %}
@@ -341,6 +344,30 @@
                     </div>
                 </div>
             </div>
+            <form method="POST" action="/refresh-artist-image"
+      onsubmit="return confirm('↺ RE-FETCH IMAGE FOR {{ artist_name }}?')">
+    <input type="hidden" name="artist_name" value="{{ artist_name }}">
+    <button type="submit" style="
+        margin-top: 10px;
+        background: transparent;
+        border: 1px solid #ff00ff44;
+        border-radius: 6px;
+        padding: 6px 12px;
+        color: #ff00aa88;
+        font-family: 'Share Tech Mono', monospace;
+        font-size: 0.6rem;
+        letter-spacing: 2px;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: block;
+        width: 100%;
+        text-align: center;
+    "
+    onmouseover="this.style.borderColor='#ff00ff';this.style.color='#ff00ff';this.style.boxShadow='0 0 10px #ff00ff33';"
+    onmouseout="this.style.borderColor='#ff00ff44';this.style.color='#ff00aa88';this.style.boxShadow='none';">
+        ↺ REFRESH IMAGE
+    </button>
+</form>
         </div>
 
         <!-- Core stats -->
