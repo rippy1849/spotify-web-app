@@ -124,8 +124,8 @@
                 <div class="stat-label">TOTAL PLAYS</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ total_minutes }}m</div>
-                <div class="stat-label">MINUTES LISTENED</div>
+                <div class="stat-value">{{ (total_minutes / 60) | round(1) }}h</div>
+<div class="stat-label">HOURS LISTENED</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">{{ best_day.date }}</div>
@@ -276,7 +276,7 @@
             cell.addEventListener('mousemove', (e) => {
                 document.getElementById('tt-date').textContent  = d.date;
                 document.getElementById('tt-plays').textContent = `▶ ${d.plays} plays`;
-                document.getElementById('tt-mins').textContent  = `⏱ ${d.minutes} minutes`;
+                document.getElementById('tt-mins').textContent  = `⏱ ${(d.minutes / 60).toFixed(1)}h`;
                 document.getElementById('tt-skips').textContent = `⏭ ${d.skips} skips`;
                 tooltip.style.display = 'block';
                 tooltip.style.left    = (e.clientX + 14) + 'px';

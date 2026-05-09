@@ -3,6 +3,9 @@ import httpx
 import urllib.parse
 import secrets
 import asyncio
+import math
+
+
 
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -604,13 +607,16 @@ async def stats(request: Request, db: AsyncSession = Depends(get_db)):
                     artist_plays[a] += 1
                     if row.was_skipped:
                         artist_skips[a] += 1
+
     best_artists = []
     for artist, plays in artist_plays.items():
-        if plays >= 5:
-            skips     = artist_skips.get(artist, 0)
+        if plays >= 10:  # raise the floor — 5 is too low
+            skips         = artist_skips.get(artist, 0)
             skip_rate_val = round(skips / plays * 100, 1)
+            love_score    = round((1 - skips / plays) * math.log(plays + 1), 4)
             best_artists.append(ArtistRateRow(artist, plays, skips, skip_rate_val))
-    best_artists = sorted(best_artists, key=lambda x: x.skip_rate)[:10]
+
+    best_artists = sorted(best_artists, key=lambda x: (1 - x.skips / x.plays) * math.log(x.plays + 1), reverse=True)[:10]
 
     # ── Top albums ────────────────────────────────────────────────────────────
     most_played_albums_q = (
